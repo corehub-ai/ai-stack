@@ -1,3 +1,4 @@
+import { parseSseData } from "./sse.js";
 import type { OllamaChatChunk, OllamaToolCall, TranslateCtx } from "./types.js";
 
 // OpenAI finish_reason → Ollama done_reason. Ollama usa "stop" tanto pra
@@ -59,6 +60,99 @@ export function translateChatNonStream(
       : { role: "assistant", content },
     done: true,
     done_reason: doneReason(choice.finish_reason),
+    total_duration: ctx.durations.total_duration,
+    load_duration: ctx.durations.load_duration,
+    prompt_eval_count: promptEvalCount,
+    prompt_eval_duration: ctx.durations.prompt_eval_duration,
+    eval_count: evalCount,
+    eval_duration: ctx.durations.eval_duration,
+  };
+}
+
+type ToolAccumulator = { id?: string; name: string; argsBuffer: string };
+
+function buildAccumulatedToolCalls(
+  acc: Map<number, ToolAccumulator>,
+): OllamaToolCall[] | undefined {
+  if (acc.size === 0) return undefined;
+  const calls: OllamaToolCall[] = [];
+  for (const [index, tool] of [...acc.entries()].sort((a, b) => a[0] - b[0])) {
+    let args: Record<string, unknown> = {};
+    if (tool.argsBuffer.length > 0) {
+      try {
+        args = JSON.parse(tool.argsBuffer) as Record<string, unknown>;
+      } catch {
+        args = {};
+      }
+    }
+    const call: OllamaToolCall = { function: { index, name: tool.name, arguments: args } };
+    if (tool.id !== undefined) call.id = tool.id;
+    calls.push(call);
+  }
+  return calls;
+}
+
+export async function* translateChatStream(
+  lines: AsyncIterable<string>,
+  ctx: TranslateCtx,
+): AsyncGenerator<OllamaChatChunk> {
+  const toolAcc = new Map<number, ToolAccumulator>();
+  let finishReason: unknown = null;
+  let promptEvalCount = ctx.promptEvalCount;
+  let evalCount = ctx.evalCount;
+
+  for await (const line of lines) {
+    const parsed = parseSseData(line);
+    if (parsed === null) continue;
+    if (parsed === "DONE") break;
+
+    const usage = parsed.usage as Record<string, unknown> | undefined;
+    if (usage) {
+      if (typeof usage.prompt_tokens === "number") promptEvalCount = usage.prompt_tokens;
+      if (typeof usage.completion_tokens === "number") evalCount = usage.completion_tokens;
+    }
+
+    const choices = parsed.choices as Array<Record<string, unknown>> | undefined;
+    const choice = choices?.[0];
+    if (!choice) continue;
+
+    if (choice.finish_reason != null) finishReason = choice.finish_reason;
+
+    const delta = (choice.delta as Record<string, unknown> | undefined) ?? {};
+
+    const deltaTools = delta.tool_calls as Array<Record<string, unknown>> | undefined;
+    if (Array.isArray(deltaTools)) {
+      for (const raw of deltaTools) {
+        const index = typeof raw.index === "number" ? raw.index : 0;
+        const fn = (raw.function as Record<string, unknown> | undefined) ?? {};
+        const existing = toolAcc.get(index) ?? { name: "", argsBuffer: "" };
+        if (typeof raw.id === "string") existing.id = raw.id;
+        if (typeof fn.name === "string") existing.name = fn.name;
+        if (typeof fn.arguments === "string") existing.argsBuffer += fn.arguments;
+        toolAcc.set(index, existing);
+      }
+    }
+
+    const content = delta.content;
+    if (typeof content === "string" && content.length > 0) {
+      yield {
+        model: ctx.model,
+        created_at: ctx.createdAt,
+        message: { role: "assistant", content },
+        done: false,
+      };
+    }
+  }
+
+  const tool_calls = buildAccumulatedToolCalls(toolAcc);
+  yield {
+    model: ctx.model,
+    created_at: ctx.createdAt,
+    message: tool_calls
+      ? { role: "assistant", content: "", tool_calls }
+      : { role: "assistant", content: "" },
+    done: true,
+    done_reason: doneReason(finishReason),
     total_duration: ctx.durations.total_duration,
     load_duration: ctx.durations.load_duration,
     prompt_eval_count: promptEvalCount,

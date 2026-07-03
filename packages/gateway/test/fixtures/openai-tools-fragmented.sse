@@ -1,0 +1,11 @@
+data: {"choices":[{"index":0,"delta":{"role":"assistant","content":"","tool_calls":[{"id":"call_frag","index":0,"type":"function","function":{"name":"get_weather","arguments":"{\"ci"}}]},"finish_reason":null}]}
+
+data: {"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"ty\":\"Pa"}}]},"finish_reason":null}]}
+
+data: {"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"ris\"}"}}]},"finish_reason":null}]}
+
+data: {"choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}
+
+data: {"choices":[],"usage":{"prompt_tokens":154,"completion_tokens":20,"total_tokens":174}}
+
+data: [DONE]
