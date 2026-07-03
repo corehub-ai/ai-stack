@@ -1171,24 +1171,44 @@ Expected: FAIL — `translateGenerateNonStream` não existe.
 // No import de tipos do topo, incluir OllamaGenerateChunk:
 //   import type { OllamaChatChunk, OllamaGenerateChunk, OllamaToolCall, TranslateCtx } from "./types.js";
 
+// exactOptionalPropertyTypes:true não deixa copiar `x: chat.done_reason`
+// (string|undefined) num literal cujo campo é opcional → helper que copia
+// só os campos definidos (sempre presentes num chunk done).
+type DoneStats = Pick<
+  OllamaChatChunk,
+  | "done_reason"
+  | "total_duration"
+  | "load_duration"
+  | "prompt_eval_count"
+  | "prompt_eval_duration"
+  | "eval_count"
+  | "eval_duration"
+>;
+
+function applyStats<T extends DoneStats>(target: T, source: DoneStats): T {
+  if (source.done_reason !== undefined) target.done_reason = source.done_reason;
+  if (source.total_duration !== undefined) target.total_duration = source.total_duration;
+  if (source.load_duration !== undefined) target.load_duration = source.load_duration;
+  if (source.prompt_eval_count !== undefined) target.prompt_eval_count = source.prompt_eval_count;
+  if (source.prompt_eval_duration !== undefined)
+    target.prompt_eval_duration = source.prompt_eval_duration;
+  if (source.eval_count !== undefined) target.eval_count = source.eval_count;
+  if (source.eval_duration !== undefined) target.eval_duration = source.eval_duration;
+  return target;
+}
+
 export function translateGenerateNonStream(
   openAiResponse: Record<string, unknown>,
   ctx: TranslateCtx,
 ): OllamaGenerateChunk {
   const chat = translateChatNonStream(openAiResponse, ctx);
-  return {
+  const out: OllamaGenerateChunk = {
     model: chat.model,
     created_at: chat.created_at,
     response: chat.message.content,
     done: true,
-    done_reason: chat.done_reason,
-    total_duration: chat.total_duration,
-    load_duration: chat.load_duration,
-    prompt_eval_count: chat.prompt_eval_count,
-    prompt_eval_duration: chat.prompt_eval_duration,
-    eval_count: chat.eval_count,
-    eval_duration: chat.eval_duration,
   };
+  return applyStats(out, chat);
 }
 
 export async function* translateGenerateStream(
@@ -1204,19 +1224,13 @@ export async function* translateGenerateStream(
         done: false,
       };
     } else {
-      yield {
+      const out: OllamaGenerateChunk = {
         model: chunk.model,
         created_at: chunk.created_at,
         response: "",
         done: true,
-        done_reason: chunk.done_reason,
-        total_duration: chunk.total_duration,
-        load_duration: chunk.load_duration,
-        prompt_eval_count: chunk.prompt_eval_count,
-        prompt_eval_duration: chunk.prompt_eval_duration,
-        eval_count: chunk.eval_count,
-        eval_duration: chunk.eval_duration,
       };
+      yield applyStats(out, chunk);
     }
   }
 }

@@ -20,6 +20,10 @@ export function buildApp(config: GatewayConfig): Hono<AuthEnv> {
   registerOpenAiRoutes(app, config);
   registerAnthropicRoutes(app, config);
 
+  // Inferência Ollama passa pela mesma auth do /v1/*; discovery (GET /,
+  // /api/version, /api/tags, /api/show) fica sem auth (Ollama real não tem).
+  app.use("/api/chat", createAuthMiddleware(config));
+  app.use("/api/generate", createAuthMiddleware(config));
   registerOllamaRoutes(app, config);
 
   return app;

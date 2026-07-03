@@ -1,5 +1,10 @@
 import { parseSseData } from "./sse.js";
-import type { OllamaChatChunk, OllamaToolCall, TranslateCtx } from "./types.js";
+import type {
+  OllamaChatChunk,
+  OllamaGenerateChunk,
+  OllamaToolCall,
+  TranslateCtx,
+} from "./types.js";
 
 // OpenAI finish_reason → Ollama done_reason. Ollama usa "stop" tanto pra
 // parada normal quanto pra tool call (confirmado ao vivo 2026-07-03).
@@ -160,4 +165,68 @@ export async function* translateChatStream(
     eval_count: evalCount,
     eval_duration: ctx.durations.eval_duration,
   };
+}
+
+// Campos de estatística compartilhados por chat e generate no chunk final.
+// exactOptionalPropertyTypes:true não deixa atribuir `x: undefined` explícito,
+// então copiamos só os que estão definidos (sempre estão num chunk done).
+type DoneStats = Pick<
+  OllamaChatChunk,
+  | "done_reason"
+  | "total_duration"
+  | "load_duration"
+  | "prompt_eval_count"
+  | "prompt_eval_duration"
+  | "eval_count"
+  | "eval_duration"
+>;
+
+function applyStats<T extends DoneStats>(target: T, source: DoneStats): T {
+  if (source.done_reason !== undefined) target.done_reason = source.done_reason;
+  if (source.total_duration !== undefined) target.total_duration = source.total_duration;
+  if (source.load_duration !== undefined) target.load_duration = source.load_duration;
+  if (source.prompt_eval_count !== undefined) target.prompt_eval_count = source.prompt_eval_count;
+  if (source.prompt_eval_duration !== undefined)
+    target.prompt_eval_duration = source.prompt_eval_duration;
+  if (source.eval_count !== undefined) target.eval_count = source.eval_count;
+  if (source.eval_duration !== undefined) target.eval_duration = source.eval_duration;
+  return target;
+}
+
+export function translateGenerateNonStream(
+  openAiResponse: Record<string, unknown>,
+  ctx: TranslateCtx,
+): OllamaGenerateChunk {
+  const chat = translateChatNonStream(openAiResponse, ctx);
+  const out: OllamaGenerateChunk = {
+    model: chat.model,
+    created_at: chat.created_at,
+    response: chat.message.content,
+    done: true,
+  };
+  return applyStats(out, chat);
+}
+
+export async function* translateGenerateStream(
+  lines: AsyncIterable<string>,
+  ctx: TranslateCtx,
+): AsyncGenerator<OllamaGenerateChunk> {
+  for await (const chunk of translateChatStream(lines, ctx)) {
+    if (!chunk.done) {
+      yield {
+        model: chunk.model,
+        created_at: chunk.created_at,
+        response: chunk.message.content,
+        done: false,
+      };
+    } else {
+      const out: OllamaGenerateChunk = {
+        model: chunk.model,
+        created_at: chunk.created_at,
+        response: "",
+        done: true,
+      };
+      yield applyStats(out, chunk);
+    }
+  }
 }
