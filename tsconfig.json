@@ -11,5 +11,5 @@
     "forceConsistentCasingInFileNames": true
   },
   "files": [],
-  "references": [{ "path": "packages/gateway" }]
+  "references": [{ "path": "packages/gateway" }, { "path": "packages/cli" }]
 }
