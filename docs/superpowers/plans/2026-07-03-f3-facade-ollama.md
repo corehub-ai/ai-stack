@@ -523,7 +523,10 @@ function toOllamaToolCalls(raw: unknown): OllamaToolCall[] | undefined {
         args = {};
       }
     }
-    calls.push({ id: call.id, function: { index, name, arguments: args } });
+    // exactOptionalPropertyTypes:true — não atribuir id:undefined explícito.
+    const toolCall: OllamaToolCall = { function: { index, name, arguments: args } };
+    if (typeof call.id === "string") toolCall.id = call.id;
+    calls.push(toolCall);
   });
   return calls;
 }
