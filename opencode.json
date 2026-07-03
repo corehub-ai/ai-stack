@@ -1,0 +1,19 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "iastack": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "ia-stack (headroom→manifest)",
+      "options": {
+        "baseURL": "http://127.0.0.1:8787/v1",
+        "apiKey": "{env:MANIFEST_KEY_OPENCODE}"
+      },
+      "models": {
+        "auto": {
+          "name": "auto (roteado pelo manifest)",
+          "limit": { "context": 200000, "output": 64000 }
+        }
+      }
+    }
+  }
+}
