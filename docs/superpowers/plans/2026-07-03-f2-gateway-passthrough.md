@@ -1626,3 +1626,34 @@ Expected: hash de `main` listado. No site: aba Actions com `ci` verde (3 jobs: `
 - [ ] Claude Code conversando via `ANTHROPIC_BASE_URL=http://<host>:11434`
 - [ ] Copilot (VS Code) BYOK Custom Endpoint conectado e respondendo (checkpoint manual, Task 7 Step 5)
 - [ ] CI verde no GitHub (3 jobs)
+
+---
+
+## Addendum: correção de segurança pós-Task 8 (2026-07-03)
+
+Uma revisão de segurança automática, rodada depois da F2 já pushada, encontrou dois achados em `deploy/compose/docker-compose.yml` e `packages/gateway/src/routes/openai.ts`. Investigados e corrigidos com um commit dedicado (não reabri as tasks acima).
+
+**1. [HIGH] Bypass de auth via reescrita de IP de origem do `docker-proxy` — CONFIRMADO empiricamente.**
+
+O `GATEWAY_TRUSTED_CIDRS` default (`172.28.1.0/24`, a subnet da rede do compose) partia da premissa de que só peers genuínos da mesma rede Docker apareceriam com um IP dessa faixa. Falso: o Docker roda `docker-proxy` (userland-proxy, **ligado por padrão**) pra cada porta publicada. Quando um processo no HOST (qualquer um — não só containers do projeto) conecta em `127.0.0.1:<porta-publicada>` ou na própria interface LAN do host, o `docker-proxy` faz hairpin dessa conexão pro container via uma NOVA conexão de saída, cujo IP de origem — do ponto de vista do container — vira o IP do gateway da bridge (`172.28.1.1` na nossa rede), **dentro** da CIDR "confiável".
+
+Verificado ao vivo (endpoint de debug temporário, removido depois): `curl http://127.0.0.1:21434/...` → gateway via `server.requestIP()` enxergava `::ffff:172.28.1.1`. Ou seja: **qualquer processo no host — não só os containers do próprio stack — conseguia bater no gateway sem nenhuma credencial e receber a chave `GATEWAY_DEFAULT_KEY` injetada.**
+
+Correção:
+- `packages/gateway/src/cidr.ts`: nova função `normalizeIp()` que remove o prefixo `::ffff:` que o Bun retorna pra peers IPv4 (bug de parsing separado, mas preciso pra sequer avaliar CIDR/loopback corretamente).
+- `packages/gateway/src/auth.ts`: usa `normalizeIp()` antes de checar `LOOPBACK_IPS`/`ipInAnyCidr`.
+- `deploy/compose/docker-compose.yml` e `.env.example`: `GATEWAY_TRUSTED_CIDRS` **não** tem mais default pra subnet do compose — fica vazio (só loopback `127.0.0.1`/`::1` é confiável por padrão). Vira uma env explicitamente opt-in, com o risco documentado no comentário, pra quando (F3+) algo como o Open WebUI precisar de fato desse caminho.
+- Testes novos: `normalizeIp` (cidr.test.ts) e um caso de auth.test.ts com IP `::ffff:...` explícito.
+
+**Por que loopback continua confiável por padrão:** é o comportamento pedido no spec (§4.4 ponto 2) e, fora do container (`bun run` direto, o cenário usado pros smoke tests manuais desta sessão), `server.requestIP()` reporta `127.0.0.1` corretamente sem essa distorção — só dentro do Docker publicado é que loopback vira indistinguível da subnet da bridge, e por isso a subnet parou de ser um default seguro.
+
+**2. [MEDIUM] Injeção de credencial via header controlado pelo cliente — investigado, não reproduzido no código atual, corrigido como *defense-in-depth*.**
+
+A função `proxyHeaders` original fazia `{...c.req.header()}` (bulk) e só sobrescrevia `headers.authorization` quando havia injeção. Testei se um cliente poderia se aproveitar de alguma inconsistência entre o lookup singular (`c.req.header("authorization")`, usado pelo middleware de auth pra decidir `hasCredential`) e o bulk (usado pra montar os headers de saída) — ex. um client mandando `Authorization` (maiúsculo) escapando da checagem. Empiricamente, o Hono normaliza chaves de header pra minúsculas em ambos os casos (`bun run` de um script de teste dedicado confirmou), então esse caminho específico não é explorável hoje.
+
+Ainda assim, a sugestão do review — parar de depender implicitamente desse comportamento do framework e ser explícito — é uma melhoria real de robustez e auditabilidade, de graça:
+- Novo módulo compartilhado `packages/gateway/src/proxy-headers.ts` (antes, `proxyHeaders` estava duplicada em `openai.ts` e `anthropic.ts` com pequenas divergências entre si — mais um motivo pra unificar).
+- Remove explicitamente `host`, `authorization` e `x-api-key` do objeto copiado antes de decidir o que mandar; nunca deixa os dois convivendo.
+- Teste dedicado `proxy-headers.test.ts` (4 casos: client-owned `authorization`, client-owned `x-api-key`, chave injetada sempre vence, `host` nunca vaza).
+
+Suíte completa após as correções: **32 testes passando** (eram 25 no fim da Task 8). `validate-gateway.sh` revalidado 100% PASS contra a cadeia real, incluindo a checagem explícita de que `curl` sem credencial via `127.0.0.1:<porta-publicada>` agora dá 401 pelo motivo certo (não mais um acidente de parsing).

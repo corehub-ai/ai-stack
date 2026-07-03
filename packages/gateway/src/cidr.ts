@@ -29,3 +29,11 @@ export function ipInCidr(ip: string, cidr: string): boolean {
 export function ipInAnyCidr(ip: string, cidrs: string[]): boolean {
   return cidrs.some((cidr) => ipInCidr(ip, cidr));
 }
+
+// Bun's server.requestIP() reports IPv4 peers in IPv4-mapped-IPv6 form
+// ("::ffff:172.28.1.1"), which ipInCidr/loopback comparisons don't parse.
+// Strip the prefix so downstream checks see the plain dotted-decimal form.
+export function normalizeIp(ip: string): string {
+  const prefix = "::ffff:";
+  return ip.startsWith(prefix) ? ip.slice(prefix.length) : ip;
+}

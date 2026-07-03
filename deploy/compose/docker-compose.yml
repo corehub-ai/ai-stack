@@ -23,7 +23,13 @@ services:
       - GATEWAY_PORT=11434
       - HEADROOM_URL=http://headroom:8787
       - MANIFEST_URL=http://manifest:2099
-      - GATEWAY_TRUSTED_CIDRS=${GATEWAY_TRUSTED_CIDRS:-172.28.1.0/24}
+      # NAO default pra 172.28.1.0/24 (a subnet da rede acima): achado
+      # 2026-07-03 -- o docker-proxy (userland-proxy, ligado por padrao)
+      # faz hairpin do trafego loopback do host pro gateway da bridge
+      # (172.28.1.1), entao QUALQUER processo no host passaria pela CIDR
+      # sem credencial. So loopback (127.0.0.1/::1) e confiavel por padrao;
+      # trate GATEWAY_TRUSTED_CIDRS como opt-in ciente do risco.
+      - GATEWAY_TRUSTED_CIDRS=${GATEWAY_TRUSTED_CIDRS:-}
       - GATEWAY_DEFAULT_KEY=${MANIFEST_KEY_LAN_ANON}
       - GATEWAY_CORS_ORIGINS=${GATEWAY_CORS_ORIGINS:-}
     depends_on:

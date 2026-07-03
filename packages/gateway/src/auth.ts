@@ -1,5 +1,5 @@
 import type { Context, Next } from "hono";
-import { ipInAnyCidr } from "./cidr.js";
+import { ipInAnyCidr, normalizeIp } from "./cidr.js";
 
 export type AuthEnv = {
   Bindings: { ip?: string };
@@ -17,7 +17,8 @@ export function createAuthMiddleware(opts: { trustedCidrs: string[]; defaultKey:
       return;
     }
 
-    const ip = c.env?.ip;
+    const rawIp = c.env?.ip;
+    const ip = rawIp !== undefined ? normalizeIp(rawIp) : undefined;
     const trusted =
       ip !== undefined && (LOOPBACK_IPS.has(ip) || ipInAnyCidr(ip, opts.trustedCidrs));
     if (!trusted) {

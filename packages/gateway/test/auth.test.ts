@@ -58,4 +58,17 @@ describe("createAuthMiddleware", () => {
     expect(body.error.type).toBe("auth_error");
     expect(body.error.code).toBe("gateway_auth");
   });
+
+  it("normalizes Bun's IPv4-mapped-IPv6 form before matching loopback/CIDR", async () => {
+    // Docker's userland-proxy hairpins host-loopback traffic to the published
+    // port through the bridge gateway; Bun reports the peer IP as
+    // "::ffff:<ipv4>" in that case (confirmed empirically 2026-07-03).
+    const loopbackApp = buildTestApp({ trustedCidrs: [], defaultKey: "mnfst_default" });
+    const loopbackRes = await loopbackApp.request("/probe", {}, { ip: "::ffff:127.0.0.1" });
+    expect(loopbackRes.status).toBe(200);
+
+    const cidrApp = buildTestApp({ trustedCidrs: ["172.28.1.0/24"], defaultKey: "mnfst_default" });
+    const cidrRes = await cidrApp.request("/probe", {}, { ip: "::ffff:172.28.1.7" });
+    expect(cidrRes.status).toBe(200);
+  });
 });

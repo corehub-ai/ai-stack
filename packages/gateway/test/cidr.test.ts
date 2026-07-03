@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { ipInAnyCidr, ipInCidr } from "../src/cidr.js";
+import { ipInAnyCidr, ipInCidr, normalizeIp } from "../src/cidr.js";
 
 describe("ipInCidr", () => {
   it("matches an address inside a /24", () => {
@@ -27,5 +27,20 @@ describe("ipInAnyCidr", () => {
   });
   it("returns false for an empty list", () => {
     expect(ipInAnyCidr("192.168.1.5", [])).toBe(false);
+  });
+});
+
+describe("normalizeIp", () => {
+  it("strips the IPv4-mapped-IPv6 prefix Bun's server.requestIP() returns", () => {
+    // Confirmed empirically 2026-07-03: Docker's userland-proxy (docker-proxy)
+    // hairpins host-loopback traffic to the published port through the bridge
+    // gateway; Bun then reports the peer as "::ffff:<ipv4>" instead of plain
+    // dotted-decimal, which ipInCidr/LOOPBACK_IPS can't parse without this.
+    expect(normalizeIp("::ffff:172.28.1.1")).toBe("172.28.1.1");
+    expect(normalizeIp("::ffff:127.0.0.1")).toBe("127.0.0.1");
+  });
+  it("leaves plain IPv4 and real IPv6 addresses untouched", () => {
+    expect(normalizeIp("127.0.0.1")).toBe("127.0.0.1");
+    expect(normalizeIp("::1")).toBe("::1");
   });
 });
