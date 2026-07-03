@@ -409,12 +409,17 @@ describe("createAuthMiddleware", () => {
       { ip: "8.8.8.8" },
     );
     expect(res.status).toBe(200);
-    expect((await res.json()).injected).toBeNull();
+    const body = (await res.json()) as { injected: string | null };
+    expect(body.injected).toBeNull();
   });
 
   it("passes through when x-api-key is present", async () => {
     const app = buildTestApp({ trustedCidrs: [], defaultKey: "mnfst_default" });
-    const res = await app.request("/probe", { headers: { "x-api-key": "sk-whatever" } }, { ip: "8.8.8.8" });
+    const res = await app.request(
+      "/probe",
+      { headers: { "x-api-key": "sk-whatever" } },
+      { ip: "8.8.8.8" },
+    );
     expect(res.status).toBe(200);
   });
 
@@ -422,14 +427,16 @@ describe("createAuthMiddleware", () => {
     const app = buildTestApp({ trustedCidrs: [], defaultKey: "mnfst_default" });
     const res = await app.request("/probe", {}, { ip: "127.0.0.1" });
     expect(res.status).toBe(200);
-    expect((await res.json()).injected).toBe("Bearer mnfst_default");
+    const body = (await res.json()) as { injected: string | null };
+    expect(body.injected).toBe("Bearer mnfst_default");
   });
 
   it("injects the default key for a caller inside GATEWAY_TRUSTED_CIDRS", async () => {
     const app = buildTestApp({ trustedCidrs: ["172.28.1.0/24"], defaultKey: "mnfst_default" });
     const res = await app.request("/probe", {}, { ip: "172.28.1.7" });
     expect(res.status).toBe(200);
-    expect((await res.json()).injected).toBe("Bearer mnfst_default");
+    const body = (await res.json()) as { injected: string | null };
+    expect(body.injected).toBe("Bearer mnfst_default");
   });
 
   it("rejects a credential-less caller outside every trusted CIDR with 401", async () => {
