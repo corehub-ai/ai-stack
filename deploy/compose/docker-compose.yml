@@ -54,9 +54,11 @@ services:
       retries: 20
 
   headroom:
-    # 0.28.0 nao existe no ghcr.io (verificado 2026-07-03 via listagem de tags);
-    # ultima tag numerada real e 0.6.7 -- variante -nonroot bate com o volume abaixo.
-    image: ghcr.io/chopratejas/headroom:0.6.7-nonroot
+    # 0.28.0 nao existe no ghcr.io; ultima tag numerada real e 0.27.0 == "latest"
+    # (checado 2026-07-03 paginando /v2/.../tags/list ate o fim -- a primeira
+    # checagem sem paginacao tinha parado em 0.6.7). Variante -nonroot bate
+    # com o volume abaixo.
+    image: ghcr.io/chopratejas/headroom:0.27.0-nonroot
     restart: unless-stopped
     command: ["--host", "0.0.0.0"]     # entrypoint da imagem e "headroom proxy"
     ports:
