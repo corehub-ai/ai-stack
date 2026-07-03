@@ -42,6 +42,26 @@ services:
       retries: 12
       start_period: 15s
 
+  openwebui:
+    image: ghcr.io/open-webui/open-webui:0.6.18
+    restart: unless-stopped
+    profiles: [ui]
+    ports:
+      - "0.0.0.0:3000:8080"            # UI de chat na LAN (auth própria do Open WebUI)
+    environment:
+      # Conexão tipo OpenAI apontando pro gateway (spec §3: mais simples que a
+      # conexão Ollama pra portar credencial). RAG interno usa embeddings
+      # locais próprios do Open WebUI, sem tocar na cadeia.
+      - OPENAI_API_BASE_URL=http://gateway:11434/v1
+      - OPENAI_API_KEY=${MANIFEST_KEY_OPENWEBUI}
+      - ENABLE_OLLAMA_API=false
+      - WEBUI_AUTH=true
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:?defina no .env}
+    volumes:
+      - openwebui_data:/app/backend/data
+    depends_on:
+      gateway:
+        condition: service_healthy
 
   manifest:
     image: manifestdotbuild/manifest:6.12.0
@@ -150,3 +170,5 @@ volumes:
     name: ia-stack_headroom
   ollama_data:
     name: ia-stack_ollama
+  openwebui_data:
+    name: ia-stack_openwebui

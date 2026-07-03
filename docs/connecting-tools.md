@@ -47,3 +47,20 @@ Estável desde a v1.122 (2026-05-28), funciona sem login GitHub.
 ]
 ```
 3. Salvar, reabrir o seletor de modelo no Chat — "ia-stack auto" deve aparecer na lista.
+
+## Open WebUI
+Sobe junto com o stack pelo profile `ui`:
+```bash
+docker compose -f deploy/compose/docker-compose.yml --env-file deploy/compose/.env \
+  --profile local-models --profile ui up -d
+```
+Abrir `http://<ip-da-maquina>:3000`, criar a conta admin (auth própria do Open WebUI),
+e usar o modelo `auto`. A conexão já vem configurada (env `OPENAI_API_BASE_URL` →
+`http://gateway:11434/v1`, chave `MANIFEST_KEY_OPENWEBUI`).
+
+## Clientes Ollama genéricos
+O gateway expõe a superfície Ollama em `:11434`. Qualquer cliente que fale o protocolo
+Ollama conecta apontando `OLLAMA_HOST=http://<ip-da-maquina>:11434`. Modelos disponíveis
+via `GET /api/tags` (só `auto` por enquanto). Clientes de loopback ou dentro de
+`GATEWAY_TRUSTED_CIDRS` não precisam de chave; os demais mandam a chave `mnfst_` do seu
+agente como `Authorization: Bearer`.
