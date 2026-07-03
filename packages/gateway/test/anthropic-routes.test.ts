@@ -13,6 +13,7 @@ function buildApp(headroomUrl: string) {
     trustedCidrs: [],
     defaultKey: "mnfst_default",
     corsOrigins: [],
+    ollamaVersion: "0.31.1",
   };
   const app = new Hono<AuthEnv>();
   app.use("*", createAuthMiddleware(config));

@@ -5,6 +5,7 @@ export type GatewayConfig = {
   trustedCidrs: string[];
   defaultKey: string;
   corsOrigins: string[];
+  ollamaVersion: string;
 };
 
 function splitList(value: string | undefined): string[] {
@@ -26,5 +27,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     trustedCidrs: splitList(env.GATEWAY_TRUSTED_CIDRS),
     defaultKey: env.GATEWAY_DEFAULT_KEY ?? "",
     corsOrigins: splitList(env.GATEWAY_CORS_ORIGINS),
+    ollamaVersion: env.GATEWAY_OLLAMA_VERSION ?? "0.31.1",
   };
 }

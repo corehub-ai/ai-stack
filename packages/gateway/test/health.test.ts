@@ -12,6 +12,7 @@ function baseConfig(overrides: Partial<GatewayConfig>): GatewayConfig {
     trustedCidrs: [],
     defaultKey: "",
     corsOrigins: [],
+    ollamaVersion: "0.31.1",
     ...overrides,
   };
 }

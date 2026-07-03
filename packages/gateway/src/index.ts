@@ -4,6 +4,7 @@ import { type AuthEnv, createAuthMiddleware } from "./auth.js";
 import { type GatewayConfig, loadConfig } from "./config.js";
 import { registerAnthropicRoutes } from "./routes/anthropic.js";
 import { registerHealthRoute } from "./routes/health.js";
+import { registerOllamaRoutes } from "./routes/ollama.js";
 import { registerOpenAiRoutes } from "./routes/openai.js";
 
 export function buildApp(config: GatewayConfig): Hono<AuthEnv> {
@@ -18,6 +19,8 @@ export function buildApp(config: GatewayConfig): Hono<AuthEnv> {
   app.use("/v1/*", createAuthMiddleware(config));
   registerOpenAiRoutes(app, config);
   registerAnthropicRoutes(app, config);
+
+  registerOllamaRoutes(app, config);
 
   return app;
 }

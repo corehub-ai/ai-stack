@@ -10,6 +10,7 @@ describe("loadConfig", () => {
     expect(config.trustedCidrs).toEqual([]);
     expect(config.defaultKey).toBe("");
     expect(config.corsOrigins).toEqual([]);
+    expect(config.ollamaVersion).toBe("0.31.1");
   });
 
   it("reads and trims comma-separated lists", () => {
