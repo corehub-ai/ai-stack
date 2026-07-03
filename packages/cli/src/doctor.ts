@@ -50,6 +50,10 @@ export async function probeChat(base: string, key: string): Promise<CheckResult>
     };
   }
   try {
+    // Nonce no prompt: headroom cacheia por texto do prompt (achado F1/F2) --
+    // um prompt fixo faria esse check reportar sucesso pra sempre a partir da
+    // primeira resposta cacheada, mesmo depois da chave ser revogada.
+    const nonce = crypto.randomUUID();
     const res = await fetchWithTimeout(
       `${base}/v1/chat/completions`,
       {
@@ -58,7 +62,7 @@ export async function probeChat(base: string, key: string): Promise<CheckResult>
         body: JSON.stringify({
           model: "auto",
           max_tokens: 16,
-          messages: [{ role: "user", content: "corehub-doctor-ping" }],
+          messages: [{ role: "user", content: `corehub-doctor-ping-${nonce}` }],
         }),
       },
       30000,
