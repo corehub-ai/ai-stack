@@ -38,6 +38,18 @@ describe("renderInitialEnv", () => {
     const out = renderInitialEnv(EXAMPLE, () => "x");
     expect(out).toContain("# comentário");
   });
+
+  test("fills secrets on a CRLF file and preserves the CRLF endings", () => {
+    const crlf = EXAMPLE.replace(/\n/g, "\r\n");
+    let n = 0;
+    const out = renderInitialEnv(crlf, () => `s${n++}`);
+    expect(out).toContain("\r\n");
+    const env = parseEnvFile(out);
+    for (const key of SECRET_KEYS) {
+      expect(env[key]).toMatch(/^s\d$/);
+    }
+    expect(env.MANIFEST_KEY_OPENCODE).toBe("");
+  });
 });
 
 describe("generateSecret", () => {

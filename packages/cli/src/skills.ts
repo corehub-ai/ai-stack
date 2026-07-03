@@ -16,7 +16,7 @@ export type EntryStatus = "absent" | "ours" | "foreign";
 
 export type SkillAction = {
   name: string;
-  kind: "create" | "ok" | "skip-foreign" | "prune";
+  kind: "create" | "ok" | "skip-foreign" | "prune" | "untrack";
 };
 
 // Pure planner. `status(name)` classifies the current on-disk entry.
@@ -34,7 +34,11 @@ export function planSkillsSync(
   }
   const desiredSet = new Set(desired);
   for (const name of managed) {
-    if (!desiredSet.has(name)) actions.push({ name, kind: "prune" });
+    if (desiredSet.has(name)) continue;
+    // Only delete a link we still own (points into skillsDir). If the user
+    // repointed it (foreign) or already removed it (absent), just drop it from
+    // tracking — never rmSync something that is no longer ours.
+    actions.push({ name, kind: status(name) === "ours" ? "prune" : "untrack" });
   }
   return actions;
 }
@@ -117,6 +121,8 @@ export function syncTarget(baseDir: string, skillsDir: string, desired: string[]
       nowManaged.add(action.name);
     } else if (action.kind === "prune") {
       if (isSymlink(target)) rmSync(target);
+      nowManaged.delete(action.name);
+    } else if (action.kind === "untrack") {
       nowManaged.delete(action.name);
     }
     // "ok" and "skip-foreign" need no filesystem change.

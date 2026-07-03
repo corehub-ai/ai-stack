@@ -13,6 +13,7 @@ function report(base: string, actions: SkillAction[]): void {
     if (a.kind === "create") say(`  + ${a.name}`, "PASS", "link criado");
     else if (a.kind === "ok") say(`  = ${a.name}`, "PASS", "já ok");
     else if (a.kind === "prune") say(`  - ${a.name}`, "PASS", "link removido (skill sumiu)");
+    else if (a.kind === "untrack") say(`  ~ ${a.name}`, "PASS", "destrackeado (não é mais nosso)");
     else say(`  ! ${a.name}`, "FAIL", "já existe e não é nosso — preservado");
   }
 }

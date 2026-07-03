@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import type { ParsedArgs } from "../cli.js";
 import { renderInitialEnv } from "../env.js";
 import { resolvePaths } from "../paths.js";
@@ -21,6 +21,10 @@ export async function cmdInit(args: ParsedArgs): Promise<number> {
 
   const rendered = renderInitialEnv(readFileSync(paths.envExample, "utf8"));
   writeFileSync(paths.envFile, rendered, { mode: 0o600 });
+  // writeFileSync's `mode` only applies when the file is created; on a --force
+  // overwrite of a pre-existing (possibly 0644) .env it is ignored, so chmod
+  // explicitly to guarantee the fresh secrets are never group/world-readable.
+  chmodSync(paths.envFile, 0o600);
 
   console.log(`✓ ${paths.envFile} criado com segredos novos (BETTER_AUTH_SECRET,`);
   console.log("  MANIFEST_ENCRYPTION_KEY, POSTGRES_PASSWORD, WEBUI_SECRET_KEY).\n");
