@@ -29,14 +29,18 @@ export function resolveModel(name: string): { model: string; headers: Record<str
 // Data fixa e determinística pros campos que o Ollama real preencheria com
 // metadata do arquivo GGUF — clientes só precisam de name/model/details.
 const SYNTHETIC_MODIFIED_AT = "2026-07-03T00:00:00Z";
+// digest de 64 hex e size não-zero de propósito: o `ollama` CLI faz
+// digest[:12] no `list` e dá panic com string vazia (verificado ao vivo).
+const SYNTHETIC_DIGEST = "0".repeat(64);
+const SYNTHETIC_SIZE = 1;
 
 export function buildTags(): { models: unknown[] } {
   const models = Object.entries(PSEUDO_MODELS).map(([name, meta]) => ({
     name,
     model: name,
     modified_at: SYNTHETIC_MODIFIED_AT,
-    size: 0,
-    digest: "",
+    size: SYNTHETIC_SIZE,
+    digest: SYNTHETIC_DIGEST,
     details: {
       parent_model: "",
       format: "gguf",
