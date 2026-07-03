@@ -1,6 +1,6 @@
 # ia-stack — Design Spec
 
-**Data:** 2026-07-02 · **Status:** aguardando revisão · **Autor:** fkmatsuda + Claude (brainstorming)
+**Data:** 2026-07-02 · **Status:** aprovado em 2026-07-02 · **Autor:** fkmatsuda + Claude (brainstorming)
 
 ## 1. Objetivo
 
@@ -142,9 +142,9 @@ Cada ferramenta = um **agente no manifest** com chave própria → custo por fer
 
 **Desenho:**
 - Biblioteca canônica versionada: diretório `skills/` neste repositório (git = o "volume central"). Se algum serviço containerizado precisar no futuro, o mesmo diretório vira bind-mount.
-- `ia skills sync` (CLI, F4) cria **symlinks por skill**: `~/.claude/skills/<name>` → `<repo>/skills/<name>`, e espelho em `~/.agents/skills/<name>` (cobre Copilot CLI/cloud agent, que não leem `~/.claude/skills`).
+- `corehub skills sync` (CLI, F4) cria **symlinks por skill**: `~/.claude/skills/<name>` → `<repo>/skills/<name>`, e espelho em `~/.agents/skills/<name>` (cobre Copilot CLI/cloud agent, que não leem `~/.claude/skills`).
 - Nunca symlinkar o diretório inteiro (bugs conhecidos no Claude Code #25367/#14836; opencode #18848; Claude Code grava `.system/` dentro do dir).
-- O sync mantém um manifest (`.ia-managed.json`) dos links geridos — não toca skills pré-existentes do usuário (ex.: as ~dezenas já em `~/.claude/skills`).
+- O sync mantém um manifest (`.corehub-managed.json`) dos links geridos — não toca skills pré-existentes do usuário (ex.: as ~dezenas já em `~/.claude/skills`).
 - Skills compartilhadas usam **só campos core do spec** (frontmatter Claude-specific como `context: fork`/`hooks` não é portável; opencode ignora campos desconhecidos, Copilot também).
 - VS Code: documentar `chat.agentSkillsLocations` apontando para o dir canônico como reforço.
 - Referência/fallback avaliado: `npx skills` (vercel-labs/skills, 24k★) automatiza o mesmo padrão; nosso sync é ~50 linhas e evita a dependência, mas se crescer, migrar é trivial.
@@ -154,7 +154,7 @@ Cada ferramenta = um **agente no manifest** com chave própria → custo por fer
 ```
 ia-stack/
 ├── packages/gateway/          # Bun + Hono (F2/F3)
-├── packages/cli/              # `ia` (F4)
+├── packages/cli/              # CLI `corehub` (F4)
 ├── deploy/compose/            # docker-compose.yml, .env.example, README de setup
 ├── skills/                    # biblioteca canônica de skills (F5)
 ├── docs/superpowers/specs/    # este spec
@@ -172,7 +172,7 @@ ia-stack/
 - **Unit:** tradutores (SSE→NDJSON, tool_calls string→objeto, options mapping) — puros, sem rede.
 - **Contract (fixtures):** golden files de streams reais — OpenAI SSE (incl. chunk de usage com `choices:[]` do manifest, resposta 424, SSE forçado sem `stream:true`) e NDJSON Ollama esperado; schema da superfície Ollama validado contra o [OpenAPI publicado](https://docs.ollama.com/openapi.yaml).
 - **E2E (checklist manual por fase):** cada ferramenta conectada, streaming visível, custo aparecendo no dashboard por agente, compressão no `/stats`, fallback disparando (derrubar provider primário).
-- **`ia doctor` (F4):** smoke-test permanente da cadeia (health dos 3 hops + request de ponta a ponta).
+- **`corehub doctor` (F4):** smoke-test permanente da cadeia (health dos 3 hops + request de ponta a ponta).
 
 ## 9. Fases
 
@@ -181,7 +181,7 @@ ia-stack/
 | **F1** | Compose (headroom+manifest+postgres), opencode apontado direto no headroom | Chat streaming ok; custo/tier no dashboard; compressão no `/stats`; chave por ferramenta atravessando (D4); fallback ok |
 | **F2** | Gateway v1: passthrough OpenAI+Anthropic+responses+models, auth LAN (4.4), `/health` | opencode, Claude Code e Copilot (BYOK Custom Endpoint) funcionando via `:11434` de outra máquina da LAN |
 | **F3** | Façade Ollama em 3 fatias: (a) `tags/show/version` + `GET /` → Copilot modo Ollama; (b) `/api/chat` NDJSON+tools; (c) `generate`+stubs. Open WebUI entra no compose | Copilot Free conecta como "Ollama"; cliente Ollama genérico conversa com tools; Open WebUI operacional |
-| **F4** | CLI `ia`: `up/down/status/doctor/init` + `skills sync` | Setup de máquina nova em ≤3 comandos; doctor verde |
+| **F4** | CLI `corehub`: `up/down/status/doctor/init` + `skills sync` | Setup de máquina nova em ≤3 comandos; doctor verde |
 | **F5** | Skills hub populado + docs de conexão por ferramenta | Mesma skill visível nas 3 ferramentas via symlink |
 
 ## 10. Riscos & mitigações
@@ -199,8 +199,8 @@ ia-stack/
 
 Embeddings/RAG na cadeia (D8 — gateway responde 501); memória do headroom (Qdrant/Neo4j); multi-usuário com quotas individuais; TLS; JetBrains/aider/n8n como alvos de teste; contribuir ingress Ollama upstream no manifest (fica como possibilidade futura).
 
-## 12. Questões abertas
+## 12. Decisões finais (2026-07-02)
 
-1. **Nome e visibilidade do repo GitHub** (sugestão: `ia-stack`, privado até decidir open source). `gh` CLI não está instalado — instalar, ou o usuário cria o repo e fornece o remote.
-2. **Licença**: confirmar MIT.
-3. **Nome do binário CLI**: `ia` (sugestão) vs `corehub`.
+1. **Repo GitHub**: `ia-stack`, **privado** até decisão de open source. Pendência operacional: criar o remote exige ação interativa do usuário (`gh auth login` após instalar o gh, ou criação manual do repo + URL do remote) — tarefa da F1.
+2. **Licença**: **MIT** (LICENSE no repo).
+3. **Nome do binário CLI**: **`corehub`**.
