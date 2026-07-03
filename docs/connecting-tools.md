@@ -81,3 +81,27 @@ Orquestra o stack a partir da raiz do repositório (ou defina `COREHUB_ROOT`):
 Rodar via `bun run corehub <cmd>` (script na raiz) ou, após `bun link` em `packages/cli`,
 direto como `corehub <cmd>`. Binário único opcional: `bun run --cwd packages/cli build`
 gera `./corehub` (defina `COREHUB_ROOT` se movê-lo pra fora do repo).
+
+## Skills compartilhadas
+
+`skills/` no repo é a biblioteca canônica (formato [agentskills.io](https://agentskills.io/specification):
+`SKILL.md` com frontmatter `name`/`description`). `corehub skills sync` cria um symlink por skill em:
+
+- `~/.claude/skills/<nome>` — lido nativamente por Claude Code; opencode e o Copilot Chat (VS Code)
+  também leem esse path como fallback de compatibilidade.
+- `~/.agents/skills/<nome>` — espelho para o Copilot CLI / cloud agent, que não lê `~/.claude/skills`.
+
+Cada base mantém seu próprio `.corehub-managed.json` com os nomes geridos pelo `corehub` — uma
+skill que já existia ali antes (não criada pelo sync) nunca é tocada nem removida.
+
+**VS Code (reforço opcional):** aponte `chat.agentSkillsLocations` nas configurações do usuário
+para o diretório canônico do repo (`<repo>/skills`), reforçando a descoberta além dos symlinks:
+
+```json
+{
+  "chat.agentSkillsLocations": ["/caminho/absoluto/para/ia-stack/skills"]
+}
+```
+
+Skills disponíveis hoje: `corehub-ops` (operar/depurar o stack via CLI) e `corehub-gateway-dev`
+(desenvolver `packages/gateway`).

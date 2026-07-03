@@ -5,8 +5,9 @@ in front of [headroom](https://github.com/headroomlabs-ai/headroom) (context com
 and [manifest](https://github.com/mnfst/manifest) (LLM routing & cost control).
 Connect opencode, GitHub Copilot, Claude Code — or anything speaking those protocols.
 
-**Status:** F4 — `corehub` CLI (`init`/`up`/`down`/`status`/`doctor` + `skills sync`).
-Gateway on `:11434` with OpenAI + Anthropic + Ollama surfaces; Open WebUI in the stack.
+**Status:** F5 — skills hub populated (`skills/corehub-ops`, `skills/corehub-gateway-dev`),
+synced via `corehub skills sync`. All phases (F1–F5) complete: gateway on `:11434` with
+OpenAI + Anthropic + Ollama surfaces, Open WebUI in the stack, `corehub` CLI, shared skills.
 
 ## Quick start (F4)
 
@@ -23,8 +24,10 @@ New machine, ≤3 commands (after cloning):
    `lan-anon`), paste their `mnfst_` keys into `.env`, then `bun run corehub up` again.
 5. `bun run corehub doctor` — the chain must be all green.
 
-Later, `bun run corehub skills sync` links the shared skills library (populated in F5) into
-`~/.claude/skills` and `~/.agents/skills`. See `docs/connecting-tools.md` for per-tool setup
-(opencode / Claude Code / Copilot / Open WebUI / Ollama clients) and the full CLI reference.
+`bun run corehub skills sync` links the shared skills library in `skills/` into
+`~/.claude/skills` and `~/.agents/skills` (per-skill symlinks; never touches skills it
+didn't create — see `skills/corehub-ops/SKILL.md`). See `docs/connecting-tools.md` for
+per-tool setup (opencode / Claude Code / Copilot / Open WebUI / Ollama clients) and the
+full CLI reference.
 
 Design spec: `docs/superpowers/specs/2026-07-02-ia-stack-design.md` (pt-BR). License: MIT.
