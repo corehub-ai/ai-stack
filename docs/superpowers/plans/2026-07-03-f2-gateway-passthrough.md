@@ -598,7 +598,9 @@ function parseHeaders(headersText: string): Headers {
 
 export function startMockUpstream(fixtureBaseName: string): { url: string; stop(): void } {
   const headersText = readFileSync(join(FIXTURES_DIR, `${fixtureBaseName}.headers.txt`), "utf8");
-  const isText = fixtureBaseName.includes("stream");
+  // endsWith, nao includes: "chat-completions-nonstream" tambem contem a
+  // substring "stream" (achado ao rodar o teste pela primeira vez).
+  const isText = fixtureBaseName.endsWith("-stream");
   const bodyPath = join(FIXTURES_DIR, `${fixtureBaseName}.body.${isText ? "txt" : "json"}`);
   const body = readFileSync(bodyPath);
   const status = parseStatus(headersText);
@@ -776,17 +778,15 @@ export function registerOpenAiRoutes(app: Hono<AuthEnv>, config: GatewayConfig):
 - [ ] **Step 6: Rodar e corrigir até verde**
 
 Run: `bun test packages/gateway/test/openai-routes.test.ts`
-Expected: `5 pass`. Se `proxy(...)` reclamar de tipos do spread `...c.req` (a assinatura de `ProxyRequestInit` do `hono/proxy` pode não aceitar todas as props de `HonoRequest` diretamente), ajustar para montar o `RequestInit` explicitamente:
+Expected: `5 pass`. O spread `...c.req` do `hono/proxy` funcionou de primeira nesta sessão (`hono@4.12.27`, incluindo o corpo do streaming) — não precisou do fallback abaixo. Se uma versão futura do Hono quebrar a assinatura do `ProxyRequestInit`, o fallback é montar o `RequestInit` explicitamente:
 
 ```typescript
 proxy(url, {
   method: c.req.method,
   body: c.req.raw.body,
-  headers: proxyHeaders(c, config),
+  headers: proxyHeaders(c),
 })
 ```
-
-Esse é o ponto do plano mais sujeito a ajuste empírico (assinatura exata do helper na versão `4.12.27`) — iterar aqui até os 5 testes passarem, sem mudar o comportamento (proxy fiel, streaming intacto).
 
 - [ ] **Step 7: Typecheck + lint + commit**
 
@@ -949,7 +949,9 @@ Expected: `2 pass`. Mesma ressalva empírica da Task 3 Step 6 se a assinatura do
 
 - [ ] **Step 6: Rodar TODA a suíte do gateway junta**
 
-Run: `cd /home/fkmatsuda/workspace/corehub.ia/ia-stack && bun test packages/gateway`
+Run: `cd /home/fkmatsuda/workspace/corehub.ia/ia-stack && bun test packages/gateway/test`
+
+(escopar em `packages/gateway/test`, não no diretório do pacote inteiro — achado ao rodar pela primeira vez: `bun test packages/gateway` também executa os `.js` compilados que `tsc --build` deixa em `packages/gateway/dist/`, que não têm as fixtures copiadas e falham com `ENOENT`)
 Expected: todos os testes (smoke + cidr + config + auth + openai-routes + anthropic-routes) `pass`, exit 0.
 
 - [ ] **Step 7: Typecheck + lint + commit**
@@ -1152,7 +1154,9 @@ describe("gateway smoke", () => {
 
 - [ ] **Step 7: Rodar a suíte inteira**
 
-Run: `cd /home/fkmatsuda/workspace/corehub.ia/ia-stack && bun test packages/gateway`
+Run: `cd /home/fkmatsuda/workspace/corehub.ia/ia-stack && bun test packages/gateway/test`
+
+(escopar em `packages/gateway/test`, não no diretório do pacote inteiro — achado ao rodar pela primeira vez: `bun test packages/gateway` também executa os `.js` compilados que `tsc --build` deixa em `packages/gateway/dist/`, que não têm as fixtures copiadas e falham com `ENOENT`)
 Expected: todos os testes `pass`.
 
 - [ ] **Step 8: Subir local fora do Docker para smoke manual rápido**
@@ -1543,7 +1547,7 @@ Inserir como novo job (mesmo arquivo da F1), antes ou depois de `compose-validat
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
       - run: bun run lint
-      - run: bun test packages/gateway
+      - run: bun test packages/gateway/test
 ```
 
 - [ ] **Step 2: Atualizar `deploy/compose/docker-compose.yml` no job `compose-validate` (a rede/serviço novo precisa validar igual)**
@@ -1579,7 +1583,7 @@ conectados via `:11434`; Copilot BYOK Custom Endpoint documentado.
 Run:
 ```bash
 cd /home/fkmatsuda/workspace/corehub.ia/ia-stack
-bun run typecheck && bun run lint && bun test packages/gateway
+bun run typecheck && bun run lint && bun test packages/gateway/test
 ./deploy/compose/scripts/validate-gateway.sh
 ```
 Expected: tudo verde.

@@ -1,0 +1,18 @@
+{
+  "id": "chatcmpl-689",
+  "object": "chat.completion",
+  "created": 1783058585,
+  "model": "qwen2.5:0.5b",
+  "system_fingerprint": "fp_ollama",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "O fixture é um jogo de esportes feito em duas batalhas"
+      },
+      "finish_reason": "length"
+    }
+  ],
+  "usage": { "prompt_tokens": 35, "completion_tokens": 16, "total_tokens": 51 }
+}

@@ -1,0 +1,22 @@
+HTTP/1.1 200 OK
+date: Fri, 03 Jul 2026 06:02:42 GMT
+server: uvicorn
+content-security-policy: default-src 'self';script-src 'self';style-src 'self' 'unsafe-inline';img-src 'self' data:;connect-src 'self';font-src 'self';object-src 'none';frame-src 'self';frame-ancestors 'none';base-uri 'self';form-action 'self';script-src-attr 'none'
+cross-origin-opener-policy: same-origin
+cross-origin-resource-policy: same-origin
+origin-agent-cluster: ?1
+referrer-policy: no-referrer
+x-content-type-options: nosniff
+x-dns-prefetch-control: off
+x-download-options: noopen
+x-frame-options: SAMEORIGIN
+x-permitted-cross-domain-policies: none
+x-xss-protection: 0
+content-type: application/json; charset=utf-8
+etag: W/"9b-UzZ+jshWhrxGwY9FfWQJ0LS3LvQ"
+vary: Accept-Encoding
+date: Fri, 03 Jul 2026 06:02:43 GMT
+connection: keep-alive
+keep-alive: timeout=5
+content-length: 155
+

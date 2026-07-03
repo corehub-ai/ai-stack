@@ -1,0 +1,7 @@
+{
+  "error": {
+    "message": "[🦚 Manifest M001] Missing the Authorization header. Set it to \"Bearer mnfst_<your-key>\". See https://manifest.build/docs/errors/M001\n\nDashboard: http://localhost:2099",
+    "type": "auth_error",
+    "code": "manifest_auth"
+  }
+}

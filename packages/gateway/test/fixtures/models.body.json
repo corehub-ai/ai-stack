@@ -1,0 +1,7 @@
+{
+  "object": "list",
+  "data": [{ "id": "auto", "object": "model", "type": "model", "display_name": "Manifest Auto" }],
+  "has_more": false,
+  "first_id": "auto",
+  "last_id": "auto"
+}
