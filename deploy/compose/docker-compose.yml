@@ -1,0 +1,99 @@
+name: ia-stack
+
+services:
+  manifest:
+    image: manifestdotbuild/manifest:6.12.0
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:2099:2099"            # dashboard na LAN (auth própria: Better Auth)
+    environment:
+      - DATABASE_URL=postgresql://manifest:${POSTGRES_PASSWORD}@postgres:5432/manifest
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:?defina no .env}
+      - BETTER_AUTH_URL=${MANIFEST_PUBLIC_URL:-http://localhost:2099}
+      - MANIFEST_ENCRYPTION_KEY=${MANIFEST_ENCRYPTION_KEY:?defina no .env}
+      - MANIFEST_MODE=selfhosted
+      - MANIFEST_TELEMETRY_DISABLED=1
+      # aponta pro tile Ollama interno (perfil local-models); nome de servico do compose,
+      # NAO e host.docker.internal:11434 -- sem risco de loop com o gateway da F2 mesmo
+      # que o servico ollama esteja parado (falha de DNS/conexao, nao um loop)
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://ollama:11434}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # imagem distroless (sem curl): usar o node embarcado
+      test: ["CMD", "/nodejs/bin/node", "-e", "fetch('http://127.0.0.1:2099/api/v1/health').then(r=>process.exit(r.status===200?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=manifest
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?defina no .env}
+      - POSTGRES_DB=manifest
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U manifest -d manifest"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  headroom:
+    image: ghcr.io/chopratejas/headroom:0.28.0
+    restart: unless-stopped
+    command: ["--host", "0.0.0.0"]     # entrypoint da imagem é o proxy (mesmo padrão do compose upstream)
+    ports:
+      - "127.0.0.1:8787:8787"          # F1: host-only. F2 remove (gateway assume a frente)
+    environment:
+      - HEADROOM_HOST=0.0.0.0
+      - OPENAI_TARGET_API_URL=http://manifest:2099
+      - ANTHROPIC_TARGET_API_URL=http://manifest:2099
+      - HEADROOM_TELEMETRY=off
+      - HEADROOM_UPDATE_CHECK=off
+      - HEADROOM_DEFAULT_MODE=optimize
+    volumes:
+      - headroom_workspace:/home/nonroot/.headroom
+    depends_on:
+      manifest:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8787/readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  # Provedor local sem credenciais externas — usado como "provedor real" da F1
+  # (decisao 2026-07-03: sem chaves de API pagas disponiveis para automacao).
+  # Nao publica porta no host: 11434 do host fica reservada para o gateway (F2).
+  ollama:
+    image: ollama/ollama:0.31.1
+    restart: unless-stopped
+    profiles: [local-models]
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+volumes:
+  pgdata:
+    name: ia-stack_pgdata
+  headroom_workspace:
+    name: ia-stack_headroom
+  ollama_data:
+    name: ia-stack_ollama
