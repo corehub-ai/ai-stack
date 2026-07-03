@@ -1,0 +1,17 @@
+{
+  "name": "ia-stack",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "typecheck": "tsc --build --pretty",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.2",
+    "typescript": "6.0.3"
+  }
+}
