@@ -64,3 +64,20 @@ Ollama conecta apontando `OLLAMA_HOST=http://<ip-da-maquina>:11434`. Modelos dis
 via `GET /api/tags` (só `auto` por enquanto). Clientes de loopback ou dentro de
 `GATEWAY_TRUSTED_CIDRS` não precisam de chave; os demais mandam a chave `mnfst_` do seu
 agente como `Authorization: Bearer`.
+
+## CLI `corehub`
+
+Orquestra o stack a partir da raiz do repositório (ou defina `COREHUB_ROOT`):
+
+| Comando | O que faz |
+|---|---|
+| `corehub init` | gera `deploy/compose/.env` com segredos novos (não sobrescreve; `--force` regenera) |
+| `corehub up [--profile ui] [--no-build]` | sobe o stack (`docker compose up -d --build`) |
+| `corehub down [--volumes]` | derruba o stack (`--volumes` apaga os volumes nomeados) |
+| `corehub status` | `docker compose ps` dos serviços |
+| `corehub doctor` | health dos 3 hops + request ponta-a-ponta (usa `MANIFEST_KEY_OPENCODE`) |
+| `corehub skills sync` | symlink por skill em `~/.claude/skills` e `~/.agents/skills` (preserva as suas) |
+
+Rodar via `bun run corehub <cmd>` (script na raiz) ou, após `bun link` em `packages/cli`,
+direto como `corehub <cmd>`. Binário único opcional: `bun run --cwd packages/cli build`
+gera `./corehub` (defina `COREHUB_ROOT` se movê-lo pra fora do repo).

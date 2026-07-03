@@ -5,20 +5,26 @@ in front of [headroom](https://github.com/headroomlabs-ai/headroom) (context com
 and [manifest](https://github.com/mnfst/manifest) (LLM routing & cost control).
 Connect opencode, GitHub Copilot, Claude Code — or anything speaking those protocols.
 
-**Status:** F3 — Ollama façade live (`/api/chat`, `/api/generate`, `tags`/`show`/`version`);
-Open WebUI in the stack; OpenAI + Anthropic surfaces from F2 still up. Gateway on `:11434`.
+**Status:** F4 — `corehub` CLI (`init`/`up`/`down`/`status`/`doctor` + `skills sync`).
+Gateway on `:11434` with OpenAI + Anthropic + Ollama surfaces; Open WebUI in the stack.
 
-## Quick start (F3)
+## Quick start (F4)
 
-1. `cd deploy/compose && cp .env.example .env` — fill the three secrets (`openssl rand -hex 32`)
-   plus `WEBUI_SECRET_KEY` if you'll use the `ui` profile. If port `11434` is already taken
-   on your machine (e.g. a native Ollama install), set `GATEWAY_HOST_PORT` in `.env`.
-2. `docker compose --profile local-models up -d --build` (add `--profile ui` for Open WebUI).
-3. Open `http://localhost:2099` — create the admin account, connect a provider (bundled
+New machine, ≤3 commands (after cloning):
+
+1. `bun install`
+2. `bun run corehub init` — writes `deploy/compose/.env` with fresh infra secrets. If port
+   `11434` is already taken on your machine (e.g. a native Ollama install), set
+   `GATEWAY_HOST_PORT` in `.env`.
+3. `bun run corehub up` — builds and starts the stack (add `--profile ui` for Open WebUI).
+4. Open `http://localhost:2099` — create the manifest admin, connect a provider (bundled
    Ollama tile works once you `docker exec <ollama-container> ollama pull <model>`), set the
    default routing tier, create the agents (`opencode`, `claude-code`, `copilot`, `openwebui`,
-   `lan-anon`) and put their `mnfst_` keys in `.env`.
-4. `./scripts/validate-ollama.sh` (and `./scripts/validate-gateway.sh`) — everything must PASS.
-5. See `docs/connecting-tools.md` for opencode / Claude Code / Copilot / Open WebUI / Ollama clients.
+   `lan-anon`), paste their `mnfst_` keys into `.env`, then `bun run corehub up` again.
+5. `bun run corehub doctor` — the chain must be all green.
+
+Later, `bun run corehub skills sync` links the shared skills library (populated in F5) into
+`~/.claude/skills` and `~/.agents/skills`. See `docs/connecting-tools.md` for per-tool setup
+(opencode / Claude Code / Copilot / Open WebUI / Ollama clients) and the full CLI reference.
 
 Design spec: `docs/superpowers/specs/2026-07-02-ia-stack-design.md` (pt-BR). License: MIT.
