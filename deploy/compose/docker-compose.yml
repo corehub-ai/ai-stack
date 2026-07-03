@@ -163,6 +163,24 @@ services:
       retries: 12
       start_period: 15s
 
+  # Sobe uma vez, roda "ollama pull codellama:latest" no `ollama` acima e sai
+  # (restart: "no") -- garante que esse modelo ja vem baixado ao levantar o
+  # stack, sem exigir um `docker exec ... ollama pull` manual depois (achado
+  # 2026-07-03: a imagem oficial do ollama nao tem env var de auto-pull; este
+  # e o padrao recomendado do ecossistema -- init container + depends_on
+  # service_healthy). Idempotente: se o modelo ja existe no volume, o pull
+  # retorna rapido sem rebaixar.
+  ollama-pull:
+    image: ollama/ollama:0.31.1
+    restart: "no"
+    profiles: [local-models]
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    command: ["pull", "codellama:latest"]
+    depends_on:
+      ollama:
+        condition: service_healthy
+
 volumes:
   pgdata:
     name: ia-stack_pgdata
