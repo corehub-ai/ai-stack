@@ -1,0 +1,1 @@
+{"id":"chatcmpl-508","type":"message","role":"assistant","model":"qwen2.5:0.5b","content":[{"type":"text","text":"O meu propósito é fornecer informações precisas e úteis. No ent"}],"stop_reason":"max_tokens","stop_sequence":null,"usage":{"input_tokens":37,"output_tokens":16,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}}

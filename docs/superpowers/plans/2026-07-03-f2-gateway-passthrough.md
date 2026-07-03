@@ -103,6 +103,8 @@ O schema 2.x moveu `organizeImports` pra dentro de `assist.actions.source`, e `l
 }
 ```
 
+Na Task 4, quando a fixture `messages-nonstream.body.json` entrar, o Biome vai querer reformatar esses bytes capturados ao vivo (perde o "exatamente como veio da cadeia real") — adicionar `"files": { "includes": ["**", "!**/test/fixtures"] }` ao `biome.json` nessa hora (ou já deixar aqui, adiantado).
+
 - [ ] **Step 5: Criar `packages/gateway/package.json`**
 
 ```json
