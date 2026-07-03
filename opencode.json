@@ -3,9 +3,9 @@
   "provider": {
     "iastack": {
       "npm": "@ai-sdk/openai-compatible",
-      "name": "ia-stack (headroom→manifest)",
+      "name": "ia-stack (gateway)",
       "options": {
-        "baseURL": "http://127.0.0.1:8787/v1",
+        "baseURL": "http://127.0.0.1:11434/v1",
         "apiKey": "{env:MANIFEST_KEY_OPENCODE}"
       },
       "models": {
