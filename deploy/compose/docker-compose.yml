@@ -1,6 +1,42 @@
 name: ia-stack
 
+networks:
+  default:
+    name: ia-stack_net
+    ipam:
+      config:
+        - subnet: 172.28.1.0/24
+
 services:
+  gateway:
+    build:
+      context: ../..
+      dockerfile: packages/gateway/Dockerfile
+    restart: unless-stopped
+    ports:
+      # host configuravel (GATEWAY_HOST_PORT) porque uma maquina pode ja ter
+      # um Ollama nativo ocupando a 11434 (achado 2026-07-03 -- nao mexemos
+      # em servico do host sem confirmar; ver .env local dessa maquina).
+      # 11434 continua sendo o padrao documentado pra LAN sem esse conflito.
+      - "0.0.0.0:${GATEWAY_HOST_PORT:-11434}:11434"
+    environment:
+      - GATEWAY_PORT=11434
+      - HEADROOM_URL=http://headroom:8787
+      - MANIFEST_URL=http://manifest:2099
+      - GATEWAY_TRUSTED_CIDRS=${GATEWAY_TRUSTED_CIDRS:-172.28.1.0/24}
+      - GATEWAY_DEFAULT_KEY=${MANIFEST_KEY_LAN_ANON}
+      - GATEWAY_CORS_ORIGINS=${GATEWAY_CORS_ORIGINS:-}
+    depends_on:
+      headroom:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://127.0.0.1:11434/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+
   manifest:
     image: manifestdotbuild/manifest:6.12.0
     restart: unless-stopped
@@ -63,8 +99,8 @@ services:
     image: ghcr.io/chopratejas/headroom:0.27.0-code-nonroot
     restart: unless-stopped
     command: ["--host", "0.0.0.0"]     # entrypoint da imagem e "headroom proxy"
-    ports:
-      - "127.0.0.1:8787:8787"          # F1: host-only. F2 remove (gateway assume a frente)
+    # F1 publicava 127.0.0.1:8787 (host-only). F2: gateway assume a frente --
+    # headroom so alcancavel pela rede interna do compose.
     environment:
       - HEADROOM_HOST=0.0.0.0
       - OPENAI_TARGET_API_URL=http://manifest:2099

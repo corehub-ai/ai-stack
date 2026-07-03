@@ -1239,6 +1239,8 @@ Expected: build `Successfully` / exit 0. Se `bun install --frozen-lockfile` falh
 
 - [ ] **Step 4: Adicionar rede fixa e serviço `gateway` ao compose; remover a porta host do `headroom`**
 
+**Achado empírico ao rodar este step**: a máquina desta sessão já tinha um `ollama.service` nativo (systemd, fora do Docker) ocupando `127.0.0.1:11434` — `docker compose up` do serviço `gateway` bateria em `EADDRINUSE` na porta host. Perguntado ao usuário; decisão foi **não mexer no serviço do sistema** e usar uma porta host alternativa só nesta máquina via `GATEWAY_HOST_PORT` (env, default `11434`, documentado como o padrão real — outras máquinas da LAN sem esse conflito usam `11434` normalmente).
+
 Editar `deploy/compose/docker-compose.yml`:
 
 ```yaml
@@ -1258,7 +1260,10 @@ services:
       dockerfile: packages/gateway/Dockerfile
     restart: unless-stopped
     ports:
-      - "0.0.0.0:11434:11434"          # unica porta LAN-facing do stack de inferencia
+      # host configuravel (GATEWAY_HOST_PORT) porque uma maquina pode ja ter
+      # um Ollama nativo ocupando a 11434 -- nao mexemos em servico do host
+      # sem confirmar. 11434 continua sendo o padrao documentado pra LAN.
+      - "0.0.0.0:${GATEWAY_HOST_PORT:-11434}:11434"
     environment:
       - GATEWAY_PORT=11434
       - HEADROOM_URL=http://headroom:8787
@@ -1287,14 +1292,18 @@ Adicionar ao final de `deploy/compose/.env.example`:
 # ── Gateway (F2) — auth LAN sem credencial só para a rede do compose ───
 GATEWAY_TRUSTED_CIDRS=172.28.1.0/24
 GATEWAY_CORS_ORIGINS=
+# Porta host do gateway. 11434 é o padrão (emula a porta default do Ollama
+# para os clientes acharem sozinhos). Só mude se a máquina já tiver um
+# Ollama nativo ocupando 11434 (ex.: GATEWAY_HOST_PORT=21434).
+GATEWAY_HOST_PORT=11434
 ```
 
-- [ ] **Step 6: Aplicar a mesma variável no `.env` local**
+- [ ] **Step 6: Aplicar as mesmas variáveis no `.env` local**
 
-Run:
+Run (ajustar `GATEWAY_HOST_PORT` se a máquina tiver um Ollama nativo — checar com `ss -tlnp | grep 11434` ou `curl -sS http://localhost:11434/api/version`; se responder `{"version":...}`, a porta já está ocupada):
 ```bash
 cd /home/fkmatsuda/workspace/corehub.ia/ia-stack/deploy/compose
-grep -q '^GATEWAY_TRUSTED_CIDRS=' .env || printf '\nGATEWAY_TRUSTED_CIDRS=172.28.1.0/24\nGATEWAY_CORS_ORIGINS=\n' >> .env
+grep -q '^GATEWAY_TRUSTED_CIDRS=' .env || printf '\nGATEWAY_TRUSTED_CIDRS=172.28.1.0/24\nGATEWAY_CORS_ORIGINS=\nGATEWAY_HOST_PORT=11434\n' >> .env
 ```
 
 - [ ] **Step 7: Validar sintaxe do compose**
@@ -1322,7 +1331,7 @@ set -u
 cd "$(dirname "$0")/.."
 set -a; source ./.env; set +a
 
-GW=http://127.0.0.1:11434
+GW="http://127.0.0.1:${GATEWAY_HOST_PORT:-11434}"
 KEY="${MANIFEST_KEY_OPENCODE:?MANIFEST_KEY_OPENCODE ausente no .env}"
 fail=0
 say() { printf '%-52s %s\n' "$1" "$2"; }
