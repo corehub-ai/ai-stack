@@ -7,12 +7,18 @@ services:
     ports:
       - "0.0.0.0:2099:2099"            # dashboard na LAN (auth própria: Better Auth)
     environment:
+      # sem PORT/BIND_ADDRESS a imagem sobe em 0.0.0.0:3001 (default) -- nao bate
+      # com o mapeamento de porta 2099 nem com o healthcheck (verificado 2026-07-03)
+      - PORT=2099
+      - BIND_ADDRESS=0.0.0.0
+      - NODE_ENV=production
       - DATABASE_URL=postgresql://manifest:${POSTGRES_PASSWORD}@postgres:5432/manifest
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:?defina no .env}
       - BETTER_AUTH_URL=${MANIFEST_PUBLIC_URL:-http://localhost:2099}
       - MANIFEST_ENCRYPTION_KEY=${MANIFEST_ENCRYPTION_KEY:?defina no .env}
       - MANIFEST_MODE=selfhosted
       - MANIFEST_TELEMETRY_DISABLED=1
+      - MANIFEST_DISABLE_HSTS=1
       # aponta pro tile Ollama interno (perfil local-models); nome de servico do compose,
       # NAO e host.docker.internal:11434 -- sem risco de loop com o gateway da F2 mesmo
       # que o servico ollama esteja parado (falha de DNS/conexao, nao um loop)
@@ -48,9 +54,11 @@ services:
       retries: 20
 
   headroom:
-    image: ghcr.io/chopratejas/headroom:0.28.0
+    # 0.28.0 nao existe no ghcr.io (verificado 2026-07-03 via listagem de tags);
+    # ultima tag numerada real e 0.6.7 -- variante -nonroot bate com o volume abaixo.
+    image: ghcr.io/chopratejas/headroom:0.6.7-nonroot
     restart: unless-stopped
-    command: ["--host", "0.0.0.0"]     # entrypoint da imagem é o proxy (mesmo padrão do compose upstream)
+    command: ["--host", "0.0.0.0"]     # entrypoint da imagem e "headroom proxy"
     ports:
       - "127.0.0.1:8787:8787"          # F1: host-only. F2 remove (gateway assume a frente)
     environment:
@@ -59,7 +67,6 @@ services:
       - ANTHROPIC_TARGET_API_URL=http://manifest:2099
       - HEADROOM_TELEMETRY=off
       - HEADROOM_UPDATE_CHECK=off
-      - HEADROOM_DEFAULT_MODE=optimize
     volumes:
       - headroom_workspace:/home/nonroot/.headroom
     depends_on:
