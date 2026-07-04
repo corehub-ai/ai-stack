@@ -35,13 +35,14 @@ if (import.meta.main) {
 
   Bun.serve({
     port: config.port,
-    // 0 = sem idle timeout. O default do Bun.serve (10s) mata a conexão em
-    // qualquer silêncio de 10s — e requests de LLM ficam mudos por mais que
-    // isso (time-to-first-token de contexto grande + compressão do headroom),
+    // Máximo do Bun (255s). O default (10s) mata a conexão em qualquer
+    // silêncio de 10s — e requests de LLM ficam mudos por mais que isso
+    // (time-to-first-token de contexto grande + compressão do headroom),
     // cortando o stream no meio ("Connection closed mid-response" no Claude
-    // Code, visto 2026-07-04). Gateway é LAN-only com poucas conexões;
-    // conexões mortas são reapadas quando o write falha.
-    idleTimeout: 0,
+    // Code, visto 2026-07-04). NÃO usar 0 (desabilitado): a LAN não é
+    // confiável neste gateway (ver GATEWAY_TRUSTED_CIDRS) e sem timeout
+    // qualquer peer segura sockets pra sempre (slowloris).
+    idleTimeout: 255,
     fetch(req, server) {
       const ip = server.requestIP(req)?.address;
       return app.fetch(req, { ip });
