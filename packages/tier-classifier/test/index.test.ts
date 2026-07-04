@@ -1,8 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import type { ClassifierConfig } from "../src/config.js";
+import type { ClassifierLogger } from "../src/index.js";
 import { buildApp } from "../src/index.js";
 
 const CLASSIFIER_TIER = "tier-classifier-internal";
+const silent: ClassifierLogger = () => {};
 
 function baseConfig(manifestUrl: string): ClassifierConfig {
   return {
@@ -41,7 +43,7 @@ describe("tier-classifier proxy", () => {
   it("passes through untouched when x-manifest-tier is already set (no classification call made)", async () => {
     const mock = startMockManifest("simple");
     try {
-      const app = buildApp(baseConfig(mock.url));
+      const app = buildApp(baseConfig(mock.url), silent);
       const res = await app.request("/v1/messages", {
         method: "POST",
         headers: { "x-manifest-tier": "fable", "content-type": "application/json" },
@@ -59,7 +61,7 @@ describe("tier-classifier proxy", () => {
   it("classifies and sets x-manifest-tier when the request has none", async () => {
     const mock = startMockManifest("complex");
     try {
-      const app = buildApp(baseConfig(mock.url));
+      const app = buildApp(baseConfig(mock.url), silent);
       const res = await app.request("/v1/messages", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -76,10 +78,33 @@ describe("tier-classifier proxy", () => {
     }
   });
 
+  it("logs a content-free decision line when classification succeeds", async () => {
+    const mock = startMockManifest("complex");
+    const logs: Record<string, unknown>[] = [];
+    try {
+      const app = buildApp(baseConfig(mock.url), (entry) => logs.push(entry));
+      await app.request("/v1/messages", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ messages: [{ role: "user", content: "refatora tudo" }] }),
+      });
+      expect(logs).toHaveLength(1);
+      expect(logs[0]).toMatchObject({
+        event: "tier-classifier.decision",
+        tier: "complex",
+        failOpen: false,
+      });
+      expect(typeof logs[0]?.latencyMs).toBe("number");
+      expect(logs[0]?.reason).toBeUndefined();
+    } finally {
+      mock.stop();
+    }
+  });
+
   it("fails open (forwards without a tier header) when classification is unparseable", async () => {
     const mock = startMockManifest("não sei classificar isso");
     try {
-      const app = buildApp(baseConfig(mock.url));
+      const app = buildApp(baseConfig(mock.url), silent);
       const res = await app.request("/v1/messages", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -93,14 +118,39 @@ describe("tier-classifier proxy", () => {
     }
   });
 
+  it("logs failOpen with a reason when classification is unparseable", async () => {
+    const mock = startMockManifest("não sei classificar isso");
+    const logs: Record<string, unknown>[] = [];
+    try {
+      const app = buildApp(baseConfig(mock.url), (entry) => logs.push(entry));
+      await app.request("/v1/messages", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ messages: [{ role: "user", content: "oi" }] }),
+      });
+      expect(logs).toHaveLength(1);
+      expect(logs[0]).toMatchObject({
+        event: "tier-classifier.decision",
+        tier: null,
+        failOpen: true,
+        reason: "classification-failed",
+      });
+    } finally {
+      mock.stop();
+    }
+  });
+
   it("returns 502 when the manifest is unreachable for the real forward", async () => {
-    const app = buildApp({
-      port: 0,
-      manifestUrl: "http://127.0.0.1:1",
-      manifestKey: "mnfst_x",
-      tier: CLASSIFIER_TIER,
-      timeoutMs: 300,
-    });
+    const app = buildApp(
+      {
+        port: 0,
+        manifestUrl: "http://127.0.0.1:1",
+        manifestKey: "mnfst_x",
+        tier: CLASSIFIER_TIER,
+        timeoutMs: 300,
+      },
+      silent,
+    );
     const res = await app.request("/v1/messages", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -112,7 +162,7 @@ describe("tier-classifier proxy", () => {
   it("GET /health checks manifest reachability (not the classification/proxy path)", async () => {
     const mock = startMockManifest("simple");
     try {
-      const app = buildApp(baseConfig(mock.url));
+      const app = buildApp(baseConfig(mock.url), silent);
       const res = await app.request("/health");
       expect(res.status).toBe(200);
       const json = (await res.json()) as { status: string };
@@ -123,13 +173,16 @@ describe("tier-classifier proxy", () => {
   });
 
   it("GET /health reports degraded (503) when manifest is unreachable", async () => {
-    const app = buildApp({
-      port: 0,
-      manifestUrl: "http://127.0.0.1:1",
-      manifestKey: "mnfst_x",
-      tier: CLASSIFIER_TIER,
-      timeoutMs: 300,
-    });
+    const app = buildApp(
+      {
+        port: 0,
+        manifestUrl: "http://127.0.0.1:1",
+        manifestKey: "mnfst_x",
+        tier: CLASSIFIER_TIER,
+        timeoutMs: 300,
+      },
+      silent,
+    );
     const res = await app.request("/health");
     expect(res.status).toBe(503);
   });
@@ -137,7 +190,7 @@ describe("tier-classifier proxy", () => {
   it("forwards GET /v1/models untouched (no body, no classification attempted)", async () => {
     const mock = startMockManifest("simple");
     try {
-      const app = buildApp(baseConfig(mock.url));
+      const app = buildApp(baseConfig(mock.url), silent);
       const res = await app.request("/v1/models");
       expect(res.status).toBe(200);
       expect(mock.seen).toHaveLength(1);
@@ -167,7 +220,7 @@ describe("tier-classifier proxy", () => {
       },
     });
     try {
-      const app = buildApp(baseConfig(`http://127.0.0.1:${server.port}`));
+      const app = buildApp(baseConfig(`http://127.0.0.1:${server.port}`), silent);
       const res = await app.request("/v1/messages", {
         method: "POST",
         headers: { "x-manifest-tier": "fable", "content-type": "application/json" },

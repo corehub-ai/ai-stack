@@ -55,7 +55,7 @@ export async function classifyTier(
       },
       body: JSON.stringify({
         // Valor inerte: o manifest sempre reescreve `model` pelo tier (achado
-        // 2026-07-04, ver docs/superpowers/specs/2026-07-04-tier-classifier-design.md D1).
+        // 2026-07-04, ver memória manifest-gateway-gotchas).
         model: "tier-classifier",
         max_tokens: 8,
         system: SYSTEM_PROMPT,

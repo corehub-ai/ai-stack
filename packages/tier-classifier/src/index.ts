@@ -6,6 +6,10 @@ import { extractLastUserMessage } from "./message-extract.js";
 
 const TIER_HEADER = "x-manifest-tier";
 
+export type ClassifierLogger = (entry: Record<string, unknown>) => void;
+
+const defaultLogger: ClassifierLogger = (entry) => console.log(JSON.stringify(entry));
+
 async function checkManifest(manifestUrl: string): Promise<{ ok: boolean; detail: string }> {
   try {
     const res = await fetch(`${manifestUrl}/api/v1/health`, { signal: AbortSignal.timeout(3000) });
@@ -15,7 +19,7 @@ async function checkManifest(manifestUrl: string): Promise<{ ok: boolean; detail
   }
 }
 
-export function buildApp(config: ClassifierConfig): Hono {
+export function buildApp(config: ClassifierConfig, logger: ClassifierLogger = defaultLogger): Hono {
   const app = new Hono();
 
   app.get("/health", async (c) => {
@@ -40,6 +44,7 @@ export function buildApp(config: ClassifierConfig): Hono {
     delete headers["content-length"];
 
     if (headers[TIER_HEADER] === undefined) {
+      const startedAt = performance.now();
       let parsedBody: unknown = null;
       try {
         parsedBody = bodyText.length > 0 ? JSON.parse(bodyText) : null;
@@ -47,10 +52,22 @@ export function buildApp(config: ClassifierConfig): Hono {
         parsedBody = null;
       }
       const userMessage = extractLastUserMessage(parsedBody);
-      if (userMessage !== null) {
-        const tier = await classifyTier(config, userMessage);
-        if (tier !== null) headers[TIER_HEADER] = tier;
-      }
+      const tier = userMessage !== null ? await classifyTier(config, userMessage) : null;
+      if (tier !== null) headers[TIER_HEADER] = tier;
+
+      // Observabilidade content-free (spec §5): sem isso, uma chave/tier mal
+      // configurada faz TODA classificação cair em fail-open silenciosamente,
+      // sem nenhum sinal em log ou no /health (achado da revisão final,
+      // 2026-07-04).
+      logger({
+        event: "tier-classifier.decision",
+        tier,
+        latencyMs: Math.round(performance.now() - startedAt),
+        failOpen: tier === null,
+        ...(tier === null
+          ? { reason: userMessage === null ? "no-user-message" : "classification-failed" }
+          : {}),
+      });
     }
 
     const url = new URL(c.req.url);

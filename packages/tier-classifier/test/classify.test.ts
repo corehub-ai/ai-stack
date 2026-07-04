@@ -116,4 +116,23 @@ describe("classifyTier", () => {
     const tier = await classifyTier(baseConfig("http://127.0.0.1:1"), "oi");
     expect(tier).toBeNull();
   });
+
+  it("skips null/non-object entries in the response content array instead of throwing", async () => {
+    const server = Bun.serve({
+      port: 0,
+      fetch: () =>
+        Response.json({
+          id: "msg_test",
+          type: "message",
+          role: "assistant",
+          content: [null, { type: "text", text: "simple" }, 42],
+        }),
+    });
+    try {
+      const tier = await classifyTier(baseConfig(`http://127.0.0.1:${server.port}`), "oi");
+      expect(tier).toBe("simple");
+    } finally {
+      server.stop(true);
+    }
+  });
 });
