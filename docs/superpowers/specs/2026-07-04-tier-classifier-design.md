@@ -42,7 +42,7 @@ Client → gateway (:11434) → headroom (:8787, compressão) → tier-classifie
 2. Se o header `x-manifest-tier` já vier preenchido → repassa pro manifest real sem tocar em mais nada (D5).
 3. Se não vier:
    a. Extrai a última mensagem do usuário do corpo (shape-aware: OpenAI `messages[]`/Anthropic `messages[]`+`system`).
-   b. Monta um prompt de classificação curto (label fechado: `simple`/`complex`/`reasoning`/`fable` ou subconjunto — ver §5).
+   b. Monta um prompt de classificação curto (label fechado: `simple`/`complex`/`reasoning`; `fable` fica de fora — ver §5).
    c. Chama `POST {MANIFEST_URL}/v1/messages` (ou `/v1/chat/completions`) com a chave do agente `tier-classifier`
       e header `x-manifest-tier: {CLASSIFIER_TIER}`, timeout curto (`CLASSIFIER_TIMEOUT_MS`).
    d. Sucesso → mapeia o label devolvido pro valor de tier que o agente-alvo (`claude-gateway`) realmente espera
@@ -70,11 +70,14 @@ apontando pro Ollama local.
 
 ## 5. Lógica de classificação
 
-- Prompt de sistema pede um único label de um conjunto fechado de dois valores: `simple` ou `complex`.
-  `reasoning` fica fora da decisão automática porque hoje aponta pro mesmo modelo que `complex`
-  (opus-4-8) — nenhum ganho em distingui-los automaticamente enquanto isso não mudar no dashboard.
-  `fable` também fica fora: é uma escolha explícita de modelo, não um nível de complexidade, e só chega
-  via `x-manifest-tier` manual (D5 já cobre esse caso — nunca é sobrescrito).
+- Prompt de sistema pede um único label de um conjunto fechado de três valores: `simple`, `complex` ou
+  `reasoning`. A distinção entre os dois últimos é semântica, não de modelo (hoje ambos apontam pro
+  mesmo `opus-4-8` no dashboard): `complex` é para implementação de código de maior porte; `reasoning`
+  é reservado para planejamento, análise e pensamento profundo — **não** para tarefas de implementação
+  de código. Fica registrado desde já para permitir divergir as rotas no futuro sem mudar o
+  classificador. `fable` fica fora da decisão automática: é uma escolha explícita de modelo, não um
+  nível de complexidade, e só chega via `x-manifest-tier` manual (D5 já cobre esse caso — nunca é
+  sobrescrito).
 - O label devolvido pelo LLM é mapeado (tabela/config, não acoplado 1:1) pro valor de header que o
   `header_tiers` do agente-alvo (`claude-gateway`) realmente espera hoje — evita que uma mudança de nome
   no dashboard do manifest quebre o classificador.
