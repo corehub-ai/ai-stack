@@ -530,13 +530,22 @@ function parseTierLabel(raw: string): string | null {
   return label !== undefined && VALID_TIERS.has(label) ? label : null;
 }
 
+function isTextBlock(block: unknown): block is { type: "text"; text: string } {
+  return (
+    typeof block === "object" &&
+    block !== null &&
+    (block as { type?: unknown }).type === "text" &&
+    typeof (block as { text?: unknown }).text === "string"
+  );
+}
+
 function extractText(body: unknown): string {
   if (typeof body !== "object" || body === null) return "";
-  const content = (body as { content?: Array<{ type?: string; text?: string }> }).content;
+  const content = (body as { content?: unknown }).content;
   if (!Array.isArray(content)) return "";
   return content
-    .filter((block) => block.type === "text" && typeof block.text === "string")
-    .map((block) => block.text as string)
+    .filter(isTextBlock)
+    .map((block) => block.text)
     .join("");
 }
 
