@@ -10,8 +10,8 @@ function messageText(message: Message): string {
   if (typeof message.content === "string") return message.content;
   if (Array.isArray(message.content)) {
     return message.content
-      .filter((block) => block.type === "text" && typeof block.text === "string")
-      .map((block) => block.text as string)
+      .filter((block) => isRecord(block) && block.type === "text" && typeof block.text === "string")
+      .map((block) => (block as ContentBlock).text as string)
       .join("\n");
   }
   return "";

@@ -59,4 +59,16 @@ describe("extractLastUserMessage", () => {
     const body = { messages: [{ role: "user", content: "   " }] };
     expect(extractLastUserMessage(body)).toBeNull();
   });
+
+  it("skips null/undefined entries in content array instead of throwing", () => {
+    const body = {
+      messages: [
+        {
+          role: "user",
+          content: [null, { type: "text", text: "hi" }, undefined],
+        },
+      ],
+    };
+    expect(extractLastUserMessage(body)).toBe("hi");
+  });
 });
