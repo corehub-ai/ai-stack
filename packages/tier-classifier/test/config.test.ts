@@ -29,4 +29,10 @@ describe("loadConfig", () => {
     const config = loadConfig({ MANIFEST_URL: "http://manifest:2099/" });
     expect(config.manifestUrl).toBe("http://manifest:2099");
   });
+
+  it("falls back to the default instead of NaN when a numeric env var is non-numeric", () => {
+    const config = loadConfig({ CLASSIFIER_PORT: "abc", CLASSIFIER_TIMEOUT_MS: "not-a-number" });
+    expect(config.port).toBe(8788);
+    expect(config.timeoutMs).toBe(800);
+  });
 });
