@@ -100,6 +100,27 @@ services:
       - no-new-privileges:true
     cap_drop: [ALL]
 
+  tier-classifier:
+    build:
+      context: ../..
+      dockerfile: packages/tier-classifier/Dockerfile
+    restart: unless-stopped
+    environment:
+      - CLASSIFIER_PORT=8788
+      - MANIFEST_URL=http://manifest:2099
+      - CLASSIFIER_MANIFEST_KEY=${MANIFEST_KEY_TIER_CLASSIFIER}
+      - CLASSIFIER_TIER=${CLASSIFIER_TIER:-default}
+      - CLASSIFIER_TIMEOUT_MS=${CLASSIFIER_TIMEOUT_MS:-800}
+    depends_on:
+      manifest:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://127.0.0.1:8788/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -129,14 +150,14 @@ services:
     # headroom so alcancavel pela rede interna do compose.
     environment:
       - HEADROOM_HOST=0.0.0.0
-      - OPENAI_TARGET_API_URL=http://manifest:2099
-      - ANTHROPIC_TARGET_API_URL=http://manifest:2099
+      - OPENAI_TARGET_API_URL=http://tier-classifier:8788
+      - ANTHROPIC_TARGET_API_URL=http://tier-classifier:8788
       - HEADROOM_TELEMETRY=off
       - HEADROOM_UPDATE_CHECK=off
     volumes:
       - headroom_workspace:/home/nonroot/.headroom
     depends_on:
-      manifest:
+      tier-classifier:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8787/readyz"]
