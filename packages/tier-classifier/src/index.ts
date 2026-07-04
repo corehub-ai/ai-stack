@@ -72,7 +72,14 @@ export function buildApp(config: ClassifierConfig): Hono {
         502,
       );
     }
-    return new Response(upstream.body, { status: upstream.status, headers: upstream.headers });
+    // Bun's fetch() decompressa o body automaticamente (gzip/br/deflate) mas
+    // preserva content-encoding/content-length originais em upstream.headers.
+    // Repassar esses headers junto do body já descomprimido faz o cliente
+    // downstream (headroom) tentar decodificar JSON puro como se fosse gzip.
+    const responseHeaders = new Headers(upstream.headers);
+    responseHeaders.delete("content-encoding");
+    responseHeaders.delete("content-length");
+    return new Response(upstream.body, { status: upstream.status, headers: responseHeaders });
   });
 
   return app;

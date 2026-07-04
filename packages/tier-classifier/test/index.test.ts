@@ -146,4 +146,40 @@ describe("tier-classifier proxy", () => {
       mock.stop();
     }
   });
+
+  it("strips stale content-encoding/content-length when upstream sent a gzip body (Bun's fetch decompresses it)", async () => {
+    const payload = {
+      ok: true,
+      receivedTier: "fable",
+      note: "corpo grande o suficiente para valer a pena comprimir",
+    };
+    const compressed = Bun.gzipSync(Buffer.from(JSON.stringify(payload)));
+    const server = Bun.serve({
+      port: 0,
+      fetch() {
+        return new Response(compressed, {
+          headers: {
+            "content-type": "application/json",
+            "content-encoding": "gzip",
+            "content-length": String(compressed.byteLength),
+          },
+        });
+      },
+    });
+    try {
+      const app = buildApp(baseConfig(`http://127.0.0.1:${server.port}`));
+      const res = await app.request("/v1/messages", {
+        method: "POST",
+        headers: { "x-manifest-tier": "fable", "content-type": "application/json" },
+        body: JSON.stringify({ messages: [{ role: "user", content: "oi" }] }),
+      });
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-encoding")).toBeNull();
+      expect(res.headers.get("content-length")).not.toBe(String(compressed.byteLength));
+      const json = await res.json();
+      expect(json).toEqual(payload);
+    } finally {
+      server.stop(true);
+    }
+  });
 });
