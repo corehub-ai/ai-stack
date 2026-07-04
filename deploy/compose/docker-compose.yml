@@ -184,20 +184,27 @@ services:
       retries: 12
       start_period: 15s
 
-  # Sobe uma vez, roda "ollama pull codellama:latest" no `ollama` acima e sai
-  # (restart: "no") -- garante que esse modelo ja vem baixado ao levantar o
+  # Sobe uma vez, roda "ollama pull" pros modelos abaixo no `ollama` acima e
+  # sai (restart: "no") -- garante que eles ja vem baixados ao levantar o
   # stack, sem exigir um `docker exec ... ollama pull` manual depois (achado
   # 2026-07-03: a imagem oficial do ollama nao tem env var de auto-pull; este
   # e o padrao recomendado do ecossistema -- init container + depends_on
   # service_healthy). Idempotente: se o modelo ja existe no volume, o pull
-  # retorna rapido sem rebaixar.
+  # retorna rapido sem rebaixar. qwen3.5:4b (2026-07-04) e o modelo do agente
+  # tier-classifier no manifest -- 3.4GB de peso, cabe com folga em 6GB de
+  # VRAM (achado da sessao) e e rapido o bastante pro timeout de 800ms da
+  # classificacao (CLASSIFIER_TIMEOUT_MS).
   ollama-pull:
     image: ollama/ollama:0.31.1
     restart: "no"
     profiles: [local-models]
     environment:
       - OLLAMA_HOST=http://ollama:11434
-    command: ["pull", "codellama:latest"]
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        ollama pull codellama:latest
+        ollama pull qwen3.5:4b
     depends_on:
       ollama:
         condition: service_healthy
