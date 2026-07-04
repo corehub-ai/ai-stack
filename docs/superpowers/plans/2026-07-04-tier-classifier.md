@@ -844,7 +844,14 @@ export function buildApp(config: ClassifierConfig): Hono {
         502,
       );
     }
-    return new Response(upstream.body, { status: upstream.status, headers: upstream.headers });
+    // Bun's fetch descomprime o corpo automaticamente, mas mantém
+    // content-encoding/content-length do upstream em upstream.headers --
+    // repassar essas duas faria o cliente tentar descomprimir um corpo já
+    // plano (achado da revisão do Task 4, 2026-07-04). Remover as duas.
+    const responseHeaders = new Headers(upstream.headers);
+    responseHeaders.delete("content-encoding");
+    responseHeaders.delete("content-length");
+    return new Response(upstream.body, { status: upstream.status, headers: responseHeaders });
   });
 
   return app;
