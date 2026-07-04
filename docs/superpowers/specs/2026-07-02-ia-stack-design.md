@@ -68,7 +68,8 @@ provedores externos (APIs, assinaturas) · ollama real interno (profile opcional
 | Rota | Tratamento |
 |---|---|
 | `POST /v1/chat/completions`, `POST /v1/responses`, `GET /v1/models` | passthrough streaming → headroom (OpenAI leg) |
-| `POST /v1/messages` (+ `count_tokens`) | passthrough streaming → headroom (Anthropic leg) |
+| `POST /v1/messages` | passthrough streaming → headroom (Anthropic leg) |
+| `POST /v1/messages/count_tokens` | **respondida localmente** com estimativa conservadora (manifest não tem a rota — 404 na cadeia inteira; sem um 200 aqui o Claude Code degrada pra estimativa própria e trava sessões grandes). Ver `packages/gateway/src/token-estimate.ts` |
 | `GET /` e `HEAD /` | `200 "Ollama is running"` |
 | `GET /api/version` | versão fixa configurável (ex. `0.31.0`) |
 | `GET /api/tags` | sintetizada: pseudo-modelos do config + (opcional, flag) modelos reais de `/v1/models` do manifest |

@@ -52,8 +52,8 @@ describe("Anthropic passthrough routes", () => {
     }
   });
 
-  it("forwards /v1/messages/count_tokens opaquely (manifest 404 is acceptable, per Claude Code's graceful degrade)", async () => {
-    const upstream = startMockUpstream("unauthenticated"); // any fixture with a JSON body works for this shape check
+  it("answers /v1/messages/count_tokens locally instead of proxying (manifest 6.13.3 404s the route)", async () => {
+    const upstream = startMockUpstream("unauthenticated"); // upstream devolveria 401; a rota não pode encostar nele
     try {
       const app = buildApp(upstream.url);
       const res = await app.request(
@@ -64,11 +64,13 @@ describe("Anthropic passthrough routes", () => {
             authorization: "Bearer mnfst_claude-code",
             "content-type": "application/json",
           },
-          body: JSON.stringify({ model: "auto", messages: [] }),
+          body: JSON.stringify({ model: "auto", messages: [{ role: "user", content: "hi" }] }),
         },
         { ip: "127.0.0.1" },
       );
-      expect(res.status).toBe(401); // this fixture is the 401 body; proves the route exists and proxies through
+      expect(res.status).toBe(200); // se tivesse proxiado, o mock devolveria 401
+      const body = (await res.json()) as { input_tokens: number };
+      expect(body.input_tokens).toBeGreaterThan(0);
     } finally {
       upstream.stop();
     }
