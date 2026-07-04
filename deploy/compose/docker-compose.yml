@@ -177,6 +177,18 @@ services:
       - OLLAMA_HOST=0.0.0.0
     volumes:
       - ollama_data:/root/.ollama
+    # Reserva a GPU nvidia pro container (achado 2026-07-04: o host tem RTX
+    # 3060 + runtime nvidia registrado no Docker, mas o container rodava 100%
+    # em CPU sem isso -- inferência local inaceitavelmente lenta pro timeout
+    # de 800ms do tier-classifier). Requer NVIDIA Container Toolkit no host
+    # (já confirmado presente: `docker info` lista "Runtimes: nvidia runc").
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     healthcheck:
       test: ["CMD", "ollama", "list"]
       interval: 10s
