@@ -29,6 +29,7 @@ jobs:
       - run: bun run lint
       - run: bun test packages/gateway/test
       - run: bun test packages/cli/test
+      - run: bun test packages/tier-classifier/test
 
   gitleaks:
     runs-on: ubuntu-latest

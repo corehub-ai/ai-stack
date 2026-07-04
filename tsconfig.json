@@ -11,5 +11,9 @@
     "forceConsistentCasingInFileNames": true
   },
   "files": [],
-  "references": [{ "path": "packages/gateway" }, { "path": "packages/cli" }]
+  "references": [
+    { "path": "packages/gateway" },
+    { "path": "packages/cli" },
+    { "path": "packages/tier-classifier" }
+  ]
 }
