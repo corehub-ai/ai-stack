@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { canonicalizeBody } from "./canonicalize.js";
 import { classifyTier } from "./classify.js";
 import type { ClassifierConfig } from "./config.js";
 import { loadConfig } from "./config.js";
@@ -97,13 +98,20 @@ export function buildApp(config: ClassifierConfig, logger: ClassifierLogger = de
     }
 
     const url = new URL(c.req.url);
+    // Remove params de sampling/thinking que o manifest é dono de definir por
+    // tier -- evita o 400 da Anthropic (temperature≠1 + thinking) e afins
+    // (spec 2026-07-05-ollama-facade-harness §adendo). Fail-safe embutido:
+    // corpo vazio/não-JSON passa intacto.
+    const { body: forwardBody, stripped } = config.canonicalize
+      ? canonicalizeBody(bodyText)
+      : { body: bodyText, stripped: [] as string[] };
     const forwardStartedAt = performance.now();
     let upstream: Response;
     try {
       upstream = await fetch(`${config.manifestUrl}${url.pathname}${url.search}`, {
         method: c.req.method,
         headers,
-        body: bodyText.length > 0 ? bodyText : undefined,
+        body: forwardBody.length > 0 ? forwardBody : undefined,
       });
     } catch (err) {
       logger({
@@ -112,6 +120,7 @@ export function buildApp(config: ClassifierConfig, logger: ClassifierLogger = de
         path: url.pathname,
         status: 502,
         latencyMs: Math.round(performance.now() - forwardStartedAt),
+        ...(stripped.length > 0 ? { stripped } : {}),
         error: `unreachable: ${err instanceof Error ? err.message : String(err)}`,
       });
       return c.json(
@@ -138,6 +147,7 @@ export function buildApp(config: ClassifierConfig, logger: ClassifierLogger = de
       path: url.pathname,
       status: upstream.status,
       latencyMs: Math.round(performance.now() - forwardStartedAt),
+      ...(stripped.length > 0 ? { stripped } : {}),
     };
 
     // Resposta streaming (SSE): não dá pra ler o corpo sem quebrar o stream --

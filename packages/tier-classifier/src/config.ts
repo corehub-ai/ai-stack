@@ -5,6 +5,7 @@ export type ClassifierConfig = {
   tier: string;
   timeoutMs: number;
   coldLoadExtraMs: number;
+  canonicalize: boolean;
 };
 
 function stripTrailingSlash(url: string): string {
@@ -20,6 +21,17 @@ function parseNumber(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+// Só desliga com um valor explicitamente falsy ("false"/"0"/"no"/"off");
+// qualquer outra coisa (inclusive lixo) mantém o default. Kill-switch da
+// canonização de request (ver canonicalize.ts).
+function parseBoolean(value: string | undefined, fallback: boolean): boolean {
+  if (value === undefined) return fallback;
+  const v = value.trim().toLowerCase();
+  if (v === "false" || v === "0" || v === "no" || v === "off") return false;
+  if (v === "true" || v === "1" || v === "yes" || v === "on") return true;
+  return fallback;
+}
+
 export function loadConfig(
   env: Record<string, string | undefined> = process.env,
 ): ClassifierConfig {
@@ -32,5 +44,6 @@ export function loadConfig(
     // Estourar o timeout normal é o sintoma de cold-load do modelo local
     // (achado 2026-07-05) -- ver retry em classify.ts.
     coldLoadExtraMs: parseNumber(env.CLASSIFIER_COLD_LOAD_EXTRA_MS, 15000),
+    canonicalize: parseBoolean(env.CLASSIFIER_CANONICALIZE, true),
   };
 }

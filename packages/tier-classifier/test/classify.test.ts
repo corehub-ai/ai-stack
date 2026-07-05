@@ -10,6 +10,7 @@ function baseConfig(manifestUrl: string): ClassifierConfig {
     tier: "default",
     timeoutMs: 300,
     coldLoadExtraMs: 1000,
+    canonicalize: true,
   };
 }
 

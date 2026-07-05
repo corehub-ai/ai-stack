@@ -10,6 +10,7 @@ describe("loadConfig", () => {
     expect(config.tier).toBe("default");
     expect(config.timeoutMs).toBe(1500);
     expect(config.coldLoadExtraMs).toBe(15000);
+    expect(config.canonicalize).toBe(true);
   });
 
   it("reads every value from env vars", () => {
@@ -20,12 +21,21 @@ describe("loadConfig", () => {
       CLASSIFIER_TIER: "classify",
       CLASSIFIER_TIMEOUT_MS: "500",
       CLASSIFIER_COLD_LOAD_EXTRA_MS: "20000",
+      CLASSIFIER_CANONICALIZE: "false",
     });
     expect(config.port).toBe(9999);
     expect(config.manifestKey).toBe("mnfst_tier-classifier");
     expect(config.tier).toBe("classify");
     expect(config.timeoutMs).toBe(500);
     expect(config.coldLoadExtraMs).toBe(20000);
+    expect(config.canonicalize).toBe(false);
+  });
+
+  it("treats CLASSIFIER_CANONICALIZE=0/off as false and anything else as the default (true)", () => {
+    expect(loadConfig({ CLASSIFIER_CANONICALIZE: "0" }).canonicalize).toBe(false);
+    expect(loadConfig({ CLASSIFIER_CANONICALIZE: "off" }).canonicalize).toBe(false);
+    expect(loadConfig({ CLASSIFIER_CANONICALIZE: "true" }).canonicalize).toBe(true);
+    expect(loadConfig({ CLASSIFIER_CANONICALIZE: "garbage" }).canonicalize).toBe(true);
   });
 
   it("strips a trailing slash from MANIFEST_URL", () => {

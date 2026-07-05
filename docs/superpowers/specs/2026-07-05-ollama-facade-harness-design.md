@@ -180,6 +180,32 @@ usada para essas rotas):
   pessoal single-user). O caminho `/v1/*` injeta `MANIFEST_KEY_LAN_ANON`, que
   precisa estar válida no dashboard.
 
+## Adendo 2 (2026-07-05): canonização de request no tier-classifier
+
+- **Causa raiz das falhas Anthropic (lidas de `agent_messages` no Postgres, não do
+  `docker logs` — o manifest não loga o erro do provider quando um fallback ocorre;
+  só persiste em `agent_messages.error_message`):** `claude-opus-4-8` devolve
+  `400 invalid_request_error: "temperature may only be set to 1 when thinking is
+  enabled or in adaptive mode"`. O GitHub Copilot (via agente `ollama-harness`)
+  manda `temperature` ≠ 1; o opus roda em thinking/adaptive; a Anthropic rejeita.
+  O `temperature` vem do CLIENTE, não da config do manifest (`param_defaults` nulo).
+- **D8 — Canonização content-blind no tier-classifier.** O tier-classifier remove
+  um conjunto fixo mínimo de params de sampling/thinking de TODO request antes do
+  forward: `temperature`, `top_p`, `top_k`, `thinking`. Racional: o manifest é dono
+  desses params por tier/agente, então os valores do cliente são redundantes (quem
+  aceita usa o default) ou quebram (Anthropic-thinking). Não identifica o modelo
+  destino — isso exigiria replicar a tabela de roteamento do manifest (acoplamento
+  que D3/D4 evitam) e seria cego a fallback; e como remover esses params é inócuo
+  pra quem aceita, a canonização incondicional é segura. `packages/tier-classifier/src/canonicalize.ts`.
+- **Fail-safe:** corpo vazio/não-JSON/não-objeto passa intacto; só reserializa se
+  removeu algo; nunca lança. Config `CLASSIFIER_CANONICALIZE` (default true) é
+  kill-switch. O log `tier-classifier.forward` ganha `stripped: [...]` (só nomes de
+  chave, nunca valores).
+- **Não resolvido por aqui:** (a) `claude-sonnet-4-6` → `400 "You're out of extra
+  usage"` (créditos da assinatura, nível de conta); (b) o fallback `glm-5.2` →
+  `401 Unauthorized` (auth do opencode-go/ollama-cloud) — ambos fora do escopo da
+  canonização.
+
 ## 8. Fora de escopo
 
 - Qualquer mudança em `headroom` ou `manifest`.

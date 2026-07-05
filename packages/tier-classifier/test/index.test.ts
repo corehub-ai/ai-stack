@@ -14,6 +14,7 @@ function baseConfig(manifestUrl: string): ClassifierConfig {
     tier: CLASSIFIER_TIER,
     timeoutMs: 300,
     coldLoadExtraMs: 1000,
+    canonicalize: true,
   };
 }
 
@@ -153,6 +154,7 @@ describe("tier-classifier proxy", () => {
         tier: CLASSIFIER_TIER,
         timeoutMs: 300,
         coldLoadExtraMs: 1000,
+        canonicalize: true,
       },
       silent,
     );
@@ -186,6 +188,7 @@ describe("tier-classifier proxy", () => {
         tier: CLASSIFIER_TIER,
         timeoutMs: 300,
         coldLoadExtraMs: 1000,
+        canonicalize: true,
       },
       silent,
     );
@@ -317,6 +320,79 @@ describe("tier-classifier proxy", () => {
       expect(forwards[0]).toMatchObject({ streaming: true, status: 200 });
       // não bufferiza streaming -> não extrai responseModel
       expect(forwards[0]?.responseModel).toBeUndefined();
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  it("strips temperature/top_p/top_k/thinking from the forwarded body and logs the stripped keys", async () => {
+    let seenBody = "";
+    const server = Bun.serve({
+      port: 0,
+      async fetch(req) {
+        seenBody = await req.text();
+        return Response.json({ ok: true });
+      },
+    });
+    const logs: Record<string, unknown>[] = [];
+    try {
+      const app = buildApp(baseConfig(`http://127.0.0.1:${server.port}`), (e) => logs.push(e));
+      const res = await app.request("/v1/messages", {
+        method: "POST",
+        headers: { "x-manifest-tier": "reasoning", "content-type": "application/json" },
+        body: JSON.stringify({
+          model: "auto",
+          messages: [{ role: "user", content: "oi" }],
+          temperature: 0.2,
+          top_p: 0.9,
+          top_k: 40,
+          thinking: { type: "enabled" },
+          max_tokens: 64,
+        }),
+      });
+      expect(res.status).toBe(200);
+      const forwarded = JSON.parse(seenBody) as Record<string, unknown>;
+      expect(forwarded.temperature).toBeUndefined();
+      expect(forwarded.top_p).toBeUndefined();
+      expect(forwarded.top_k).toBeUndefined();
+      expect(forwarded.thinking).toBeUndefined();
+      // estrutural preservado
+      expect(forwarded.max_tokens).toBe(64);
+      expect(forwarded.messages).toEqual([{ role: "user", content: "oi" }]);
+      const forwards = logs.filter((l) => l.event === "tier-classifier.forward");
+      expect((forwards[0]?.stripped as string[]).sort()).toEqual([
+        "temperature",
+        "thinking",
+        "top_k",
+        "top_p",
+      ]);
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  it("does not strip anything when canonicalize is disabled", async () => {
+    let seenBody = "";
+    const server = Bun.serve({
+      port: 0,
+      async fetch(req) {
+        seenBody = await req.text();
+        return Response.json({ ok: true });
+      },
+    });
+    const logs: Record<string, unknown>[] = [];
+    try {
+      const config = { ...baseConfig(`http://127.0.0.1:${server.port}`), canonicalize: false };
+      const app = buildApp(config, (e) => logs.push(e));
+      await app.request("/v1/messages", {
+        method: "POST",
+        headers: { "x-manifest-tier": "reasoning", "content-type": "application/json" },
+        body: JSON.stringify({ messages: [{ role: "user", content: "oi" }], temperature: 0.2 }),
+      });
+      const forwarded = JSON.parse(seenBody) as Record<string, unknown>;
+      expect(forwarded.temperature).toBe(0.2);
+      const forwards = logs.filter((l) => l.event === "tier-classifier.forward");
+      expect(forwards[0]?.stripped).toBeUndefined();
     } finally {
       server.stop(true);
     }
