@@ -81,6 +81,34 @@ describe("gateway request log", () => {
     }
   });
 
+  it("logs injected-default (com a shape da credencial original) quando um caller confiável manda credencial não-mnfst", async () => {
+    const upstream = startOkUpstream();
+    try {
+      const { app, logs } = appWithLogs(upstream.url);
+      const res = await app.request(
+        "/api/chat",
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: "Bearer ghu_copilot_token",
+          },
+          body: CHAT_BODY,
+        },
+        { ip: "127.0.0.1" },
+      );
+      expect(res.status).toBe(200);
+      expect(logs[0]).toMatchObject({
+        auth: "injected-default",
+        authHeader: "authorization",
+        manifestKeyShape: false,
+        status: 200,
+      });
+    } finally {
+      upstream.stop();
+    }
+  });
+
   it("marks manifestKeyShape true for a Bearer mnfst_ credential", async () => {
     const upstream = startOkUpstream();
     try {

@@ -24,14 +24,55 @@ describe("createAuthMiddleware", () => {
     expect(body.injected).toBeNull();
   });
 
-  it("passes through when x-api-key is present", async () => {
+  it("passes through when x-api-key carries a manifest-shaped key", async () => {
+    const app = buildTestApp({ trustedCidrs: [], defaultKey: "mnfst_default" });
+    const res = await app.request(
+      "/probe",
+      { headers: { "x-api-key": "mnfst_whatever" } },
+      { ip: "8.8.8.8" },
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { injected: string | null };
+    expect(body.injected).toBeNull();
+  });
+
+  it("treats a non-manifest credential from a TRUSTED caller as anonymous: injects the default key", async () => {
+    // Copilot manda o token GitHub dele no Authorization (achado 2026-07-05);
+    // o manifest rejeita qualquer chave sem prefixo mnfst_ com M003, então
+    // repassar é falha garantida -- injetar é estritamente melhor.
+    const app = buildTestApp({ trustedCidrs: [], defaultKey: "mnfst_default" });
+    const res = await app.request(
+      "/probe",
+      { headers: { authorization: "Bearer ghu_github_token" } },
+      { ip: "127.0.0.1" },
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { injected: string | null };
+    expect(body.injected).toBe("Bearer mnfst_default");
+  });
+
+  it("401s a non-manifest credential from an UNTRUSTED caller (clean error instead of a masked M003)", async () => {
+    const app = buildTestApp({ trustedCidrs: [], defaultKey: "mnfst_default" });
+    const res = await app.request(
+      "/probe",
+      { headers: { authorization: "Bearer ghu_github_token" } },
+      { ip: "8.8.8.8" },
+    );
+    expect(res.status).toBe(401);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("gateway_auth");
+  });
+
+  it("treats a non-manifest x-api-key the same way (anonymous)", async () => {
     const app = buildTestApp({ trustedCidrs: [], defaultKey: "mnfst_default" });
     const res = await app.request(
       "/probe",
       { headers: { "x-api-key": "sk-whatever" } },
-      { ip: "8.8.8.8" },
+      { ip: "127.0.0.1" },
     );
     expect(res.status).toBe(200);
+    const body = (await res.json()) as { injected: string | null };
+    expect(body.injected).toBe("Bearer mnfst_default");
   });
 
   it("injects the default key for an untrusted-but-loopback caller with no credential", async () => {

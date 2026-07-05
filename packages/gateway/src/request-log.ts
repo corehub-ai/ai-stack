@@ -36,21 +36,25 @@ export function createRequestLog(logger: GatewayLogger): MiddlewareHandler<AuthE
       latencyMs: Math.round(performance.now() - startedAt),
     };
 
+    // Shape da credencial que o CLIENTE apresentou (se alguma) -- fica no log
+    // mesmo quando o gateway a substitui pela injetada.
     const authorization = c.req.header("authorization");
     const apiKey = c.req.header("x-api-key");
     if (authorization !== undefined) {
-      entry.auth = "client";
       entry.authHeader = "authorization";
       entry.manifestKeyShape = /^Bearer mnfst_/.test(authorization);
     } else if (apiKey !== undefined) {
-      entry.auth = "client";
       entry.authHeader = "x-api-key";
       entry.manifestKeyShape = apiKey.startsWith("mnfst_");
-    } else if (c.get("injectedAuthHeader") !== undefined) {
-      // anônimo confiável: o auth middleware injetou o defaultKey da superfície
+    }
+
+    // O que foi de fato rio acima: injetado (anônimo confiável OU credencial
+    // não-mnfst substituída), a credencial do cliente, ou nada (401 aqui).
+    if (c.get("injectedAuthHeader") !== undefined) {
       entry.auth = "injected-default";
+    } else if (authorization !== undefined || apiKey !== undefined) {
+      entry.auth = "client";
     } else {
-      // anônimo fora do conjunto confiável (ou rota sem auth middleware)
       entry.auth = "anonymous";
     }
 

@@ -8,11 +8,20 @@ export type AuthEnv = {
 
 const LOOPBACK_IPS = new Set(["127.0.0.1", "::1"]);
 
+// Só credencial com formato de chave do manifest merece passar adiante: o
+// manifest é o único upstream e rejeita qualquer outra coisa com M003 ("keys
+// start with mnfst_") -- que ainda volta embrulhado num 200 pelo headroom,
+// virando um erro indecifrável no cliente. Caso concreto (2026-07-05): o
+// GitHub Copilot manda o token GitHub dele no Authorization. Tratar
+// não-mnfst como "sem credencial" é estritamente melhor que repassar.
+function presentsManifestKey(c: Context<AuthEnv>): boolean {
+  if (c.req.header("authorization")?.startsWith("Bearer mnfst_")) return true;
+  return c.req.header("x-api-key")?.startsWith("mnfst_") ?? false;
+}
+
 export function createAuthMiddleware(opts: { trustedCidrs: string[]; defaultKey: string }) {
   return async (c: Context<AuthEnv>, next: Next) => {
-    const hasCredential =
-      c.req.header("authorization") !== undefined || c.req.header("x-api-key") !== undefined;
-    if (hasCredential) {
+    if (presentsManifestKey(c)) {
       await next();
       return;
     }
@@ -26,7 +35,7 @@ export function createAuthMiddleware(opts: { trustedCidrs: string[]; defaultKey:
         {
           error: {
             message:
-              "Missing Authorization/x-api-key header, and the caller is not loopback or in GATEWAY_TRUSTED_CIDRS.",
+              "No manifest key (mnfst_*) in Authorization/x-api-key (missing or non-manifest credential), and the caller is not loopback or in GATEWAY_TRUSTED_CIDRS.",
             type: "auth_error",
             code: "gateway_auth",
           },

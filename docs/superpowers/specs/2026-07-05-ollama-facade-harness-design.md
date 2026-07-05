@@ -151,6 +151,35 @@ usada para essas rotas):
 | Confundir com override para callers credenciados | D4 — escopo restrito ao caso anônimo, testado explicitamente |
 | Tier "Default" do novo agente mal configurada no dashboard (mesma classe de erro já visto com o agente `tier-classifier` — 400 mascarado por model id inválido) | Passo manual do usuário, fora do código; testar com uma chamada real (`/v1/responses` ou `/v1/messages`) antes de dar como concluído |
 
+## Adendo (2026-07-05, mesmo dia): credencial não-mnfst tratada como ausente
+
+- **D7 — Caso concreto encontrado horas depois do deploy:** o GitHub Copilot
+  (BYOK, provider "Ollama") manda o **token GitHub dele** no `Authorization`
+  ao inferir — e infere via `/v1/chat/completions` (só usa `/api/tags`/`show`
+  pra descoberta, então a chave da façade nem se aplica ao tráfego dele). O
+  gateway repassava a credencial intocada (D4), o manifest rejeitava com M003
+  ("keys start with mnfst_", **sem logar**), e o headroom embrulhava o 401 num
+  200 — erro indecifrável no cliente, invisível nos logs da cadeia.
+- **Refinamento de D4:** D4 continua valendo para credencial com formato de
+  chave do manifest (`Bearer mnfst_*` / `x-api-key: mnfst_*`) — repassada
+  intocada. Credencial **sem** esse formato passa a ser tratada como ausente
+  (`packages/gateway/src/auth.ts`, `presentsManifestKey`): caller confiável →
+  injeta o `defaultKey` da superfície; não-confiável → 401 limpo do próprio
+  gateway. Racional: o manifest é o único upstream e só aceita `mnfst_*`;
+  repassar outra coisa é falha garantida com pior diagnóstico.
+- **Log estruturado de requests** (`packages/gateway/src/request-log.ts`):
+  toda request (exceto `/health`) gera linha JSON content-free com método,
+  path, status, latência, origem da credencial efetivamente enviada rio acima
+  (`auth`: `client`/`injected-default`/`anonymous`) e a shape da credencial
+  que o cliente apresentou (`authHeader` + `manifestKeyShape`) — nunca o
+  valor. Foi esse log que revelou o comportamento do Copilot.
+- **Operacional:** para o tráfego do host (hairpin do docker-proxy →
+  `172.28.1.1`) ser elegível à injeção, o usuário optou conscientemente por
+  `GATEWAY_TRUSTED_CIDRS=172.28.1.0/24` no `.env` (risco documentado no
+  próprio `.env.example`: qualquer processo do host passa sem chave — máquina
+  pessoal single-user). O caminho `/v1/*` injeta `MANIFEST_KEY_LAN_ANON`, que
+  precisa estar válida no dashboard.
+
 ## 8. Fora de escopo
 
 - Qualquer mudança em `headroom` ou `manifest`.
