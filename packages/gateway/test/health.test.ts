@@ -13,6 +13,7 @@ function baseConfig(overrides: Partial<GatewayConfig>): GatewayConfig {
     defaultKey: "",
     corsOrigins: [],
     ollamaVersion: "0.31.1",
+    ollamaDefaultKey: "",
     ...overrides,
   };
 }

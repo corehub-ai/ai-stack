@@ -32,6 +32,12 @@ services:
       - GATEWAY_TRUSTED_CIDRS=${GATEWAY_TRUSTED_CIDRS:-}
       - GATEWAY_DEFAULT_KEY=${MANIFEST_KEY_LAN_ANON}
       - GATEWAY_CORS_ORIGINS=${GATEWAY_CORS_ORIGINS:-}
+      # Identidade dedicada (harness) pro caller anônimo/confiável na façade
+      # Ollama (/api/chat, /api/generate) -- separada da MANIFEST_KEY_LAN_ANON
+      # usada por /v1/* (achado 2026-07-05, spec
+      # 2026-07-05-ollama-facade-harness-design.md). Vazio até configurar:
+      # cai no GATEWAY_DEFAULT_KEY acima (comportamento de hoje).
+      - GATEWAY_OLLAMA_DEFAULT_KEY=${MANIFEST_KEY_OLLAMA_FACADE:-}
     depends_on:
       headroom:
         condition: service_healthy

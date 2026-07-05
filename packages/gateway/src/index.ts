@@ -20,10 +20,18 @@ export function buildApp(config: GatewayConfig): Hono<AuthEnv> {
   registerOpenAiRoutes(app, config);
   registerAnthropicRoutes(app, config);
 
-  // Inferência Ollama passa pela mesma auth do /v1/*; discovery (GET /,
-  // /api/version, /api/tags, /api/show) fica sem auth (Ollama real não tem).
-  app.use("/api/chat", createAuthMiddleware(config));
-  app.use("/api/generate", createAuthMiddleware(config));
+  // Inferência Ollama usa a mesma lógica de auth do /v1/*, mas com um
+  // defaultKey próprio (config.ollamaDefaultKey) -- dá identidade dedicada no
+  // manifest pro caller anônimo/confiável da façade Ollama, sem afetar quem já
+  // manda sua própria credencial (spec 2026-07-05-ollama-facade-harness).
+  // Discovery (GET /, /api/version, /api/tags, /api/show) fica sem auth
+  // (Ollama real não tem).
+  const ollamaAuth = createAuthMiddleware({
+    trustedCidrs: config.trustedCidrs,
+    defaultKey: config.ollamaDefaultKey,
+  });
+  app.use("/api/chat", ollamaAuth);
+  app.use("/api/generate", ollamaAuth);
   registerOllamaRoutes(app, config);
 
   return app;

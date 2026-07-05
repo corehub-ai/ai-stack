@@ -14,6 +14,7 @@ function buildApp(headroomUrl: string) {
     defaultKey: "mnfst_default",
     corsOrigins: [],
     ollamaVersion: "0.31.1",
+    ollamaDefaultKey: "mnfst_default",
   };
   const app = new Hono<AuthEnv>();
   app.use("*", createAuthMiddleware(config));

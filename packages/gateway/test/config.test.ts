@@ -11,6 +11,28 @@ describe("loadConfig", () => {
     expect(config.defaultKey).toBe("");
     expect(config.corsOrigins).toEqual([]);
     expect(config.ollamaVersion).toBe("0.31.1");
+    expect(config.ollamaDefaultKey).toBe("");
+  });
+
+  it("uses GATEWAY_OLLAMA_DEFAULT_KEY for ollamaDefaultKey when set", () => {
+    const config = loadConfig({
+      GATEWAY_DEFAULT_KEY: "mnfst_lan_anon",
+      GATEWAY_OLLAMA_DEFAULT_KEY: "mnfst_ollama_facade",
+    });
+    expect(config.ollamaDefaultKey).toBe("mnfst_ollama_facade");
+  });
+
+  it("falls back to GATEWAY_DEFAULT_KEY when GATEWAY_OLLAMA_DEFAULT_KEY is unset", () => {
+    const config = loadConfig({ GATEWAY_DEFAULT_KEY: "mnfst_lan_anon" });
+    expect(config.ollamaDefaultKey).toBe("mnfst_lan_anon");
+  });
+
+  it("falls back to GATEWAY_DEFAULT_KEY when GATEWAY_OLLAMA_DEFAULT_KEY is empty (compose always defines the var)", () => {
+    const config = loadConfig({
+      GATEWAY_DEFAULT_KEY: "mnfst_lan_anon",
+      GATEWAY_OLLAMA_DEFAULT_KEY: "",
+    });
+    expect(config.ollamaDefaultKey).toBe("mnfst_lan_anon");
   });
 
   it("reads and trims comma-separated lists", () => {
