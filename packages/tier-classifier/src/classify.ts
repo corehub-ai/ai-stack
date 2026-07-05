@@ -36,36 +36,63 @@ function extractText(body: unknown): string {
     .join("");
 }
 
+// AbortSignal.timeout() lança um DOMException com esse name exato ao expirar
+// (confirmado empiricamente, Bun 1.3.x) -- distinto de erro de rede/status.
+function isTimeoutError(err: unknown): boolean {
+  return (
+    typeof err === "object" && err !== null && (err as { name?: unknown }).name === "TimeoutError"
+  );
+}
+
+async function attemptClassify(
+  config: ClassifierConfig,
+  userMessage: string,
+  timeoutMs: number,
+): Promise<string | null> {
+  const res = await fetch(`${config.manifestUrl}/v1/messages`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${config.manifestKey}`,
+      "x-manifest-tier": config.tier,
+    },
+    body: JSON.stringify({
+      // Valor inerte: o manifest sempre reescreve `model` pelo tier (achado
+      // 2026-07-04, ver memória manifest-gateway-gotchas).
+      model: "tier-classifier",
+      max_tokens: 8,
+      system: SYSTEM_PROMPT,
+      messages: [{ role: "user", content: userMessage }],
+    }),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!res.ok) return null;
+  const json = await res.json();
+  return parseTierLabel(extractText(json));
+}
+
 /**
  * Chama o agente dedicado `tier-classifier` no manifest (D6) para classificar
  * `userMessage`. Nunca lança -- qualquer falha (rede, timeout, status não-2xx,
  * label não reconhecido) vira `null`, para o chamador fazer fail-open (D5/D6).
+ *
+ * Se a 1a tentativa estourar especificamente o timeout -- sintoma de
+ * cold-load do modelo local (achado 2026-07-05, ver [[ia-stack-goal]]) --
+ * tenta 1 vez a mais com timeoutMs + coldLoadExtraMs. Qualquer outra falha
+ * (status não-2xx, rede, label inválido) não tem retry: mais tempo não
+ * resolveria um erro que já não é de demora.
  */
 export async function classifyTier(
   config: ClassifierConfig,
   userMessage: string,
 ): Promise<string | null> {
   try {
-    const res = await fetch(`${config.manifestUrl}/v1/messages`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${config.manifestKey}`,
-        "x-manifest-tier": config.tier,
-      },
-      body: JSON.stringify({
-        // Valor inerte: o manifest sempre reescreve `model` pelo tier (achado
-        // 2026-07-04, ver memória manifest-gateway-gotchas).
-        model: "tier-classifier",
-        max_tokens: 8,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: "user", content: userMessage }],
-      }),
-      signal: AbortSignal.timeout(config.timeoutMs),
-    });
-    if (!res.ok) return null;
-    const json = await res.json();
-    return parseTierLabel(extractText(json));
+    return await attemptClassify(config, userMessage, config.timeoutMs);
+  } catch (err) {
+    if (!isTimeoutError(err)) return null;
+  }
+  try {
+    return await attemptClassify(config, userMessage, config.timeoutMs + config.coldLoadExtraMs);
   } catch {
     return null;
   }

@@ -4,6 +4,7 @@ export type ClassifierConfig = {
   manifestKey: string;
   tier: string;
   timeoutMs: number;
+  coldLoadExtraMs: number;
 };
 
 function stripTrailingSlash(url: string): string {
@@ -28,5 +29,8 @@ export function loadConfig(
     manifestKey: env.CLASSIFIER_MANIFEST_KEY ?? "",
     tier: env.CLASSIFIER_TIER ?? "default",
     timeoutMs: parseNumber(env.CLASSIFIER_TIMEOUT_MS, 1500),
+    // Estourar o timeout normal é o sintoma de cold-load do modelo local
+    // (achado 2026-07-05) -- ver retry em classify.ts.
+    coldLoadExtraMs: parseNumber(env.CLASSIFIER_COLD_LOAD_EXTRA_MS, 15000),
   };
 }

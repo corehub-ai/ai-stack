@@ -9,6 +9,7 @@ describe("loadConfig", () => {
     expect(config.manifestKey).toBe("");
     expect(config.tier).toBe("default");
     expect(config.timeoutMs).toBe(1500);
+    expect(config.coldLoadExtraMs).toBe(15000);
   });
 
   it("reads every value from env vars", () => {
@@ -18,11 +19,13 @@ describe("loadConfig", () => {
       CLASSIFIER_MANIFEST_KEY: "mnfst_tier-classifier",
       CLASSIFIER_TIER: "classify",
       CLASSIFIER_TIMEOUT_MS: "500",
+      CLASSIFIER_COLD_LOAD_EXTRA_MS: "20000",
     });
     expect(config.port).toBe(9999);
     expect(config.manifestKey).toBe("mnfst_tier-classifier");
     expect(config.tier).toBe("classify");
     expect(config.timeoutMs).toBe(500);
+    expect(config.coldLoadExtraMs).toBe(20000);
   });
 
   it("strips a trailing slash from MANIFEST_URL", () => {
@@ -31,8 +34,13 @@ describe("loadConfig", () => {
   });
 
   it("falls back to the default instead of NaN when a numeric env var is non-numeric", () => {
-    const config = loadConfig({ CLASSIFIER_PORT: "abc", CLASSIFIER_TIMEOUT_MS: "not-a-number" });
+    const config = loadConfig({
+      CLASSIFIER_PORT: "abc",
+      CLASSIFIER_TIMEOUT_MS: "not-a-number",
+      CLASSIFIER_COLD_LOAD_EXTRA_MS: "also-not-a-number",
+    });
     expect(config.port).toBe(8788);
     expect(config.timeoutMs).toBe(1500);
+    expect(config.coldLoadExtraMs).toBe(15000);
   });
 });

@@ -9,6 +9,7 @@ function baseConfig(manifestUrl: string): ClassifierConfig {
     manifestKey: "mnfst_test-classifier",
     tier: "default",
     timeoutMs: 300,
+    coldLoadExtraMs: 1000,
   };
 }
 
@@ -95,7 +96,30 @@ describe("classifyTier", () => {
     }
   });
 
-  it("returns null (fail-open) when manifest doesn't respond within timeoutMs", async () => {
+  it("retries once with timeoutMs + coldLoadExtraMs when the first attempt times out (cold-load), and returns the label if the retry succeeds", async () => {
+    const server = Bun.serve({
+      port: 0,
+      async fetch() {
+        // Mais que timeoutMs (100ms) sozinho, mas dentro de timeoutMs +
+        // coldLoadExtraMs (100 + 300 = 400ms) -- simula um cold-load real.
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        return anthropicTextResponse("complex");
+      },
+    });
+    try {
+      const config = {
+        ...baseConfig(`http://127.0.0.1:${server.port}`),
+        timeoutMs: 100,
+        coldLoadExtraMs: 300,
+      };
+      const tier = await classifyTier(config, "refatora esse módulo inteiro");
+      expect(tier).toBe("complex");
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  it("returns null (fail-open) when even the retry times out", async () => {
     const server = Bun.serve({
       port: 0,
       async fetch() {
@@ -104,9 +128,32 @@ describe("classifyTier", () => {
       },
     });
     try {
-      const config = { ...baseConfig(`http://127.0.0.1:${server.port}`), timeoutMs: 50 };
+      const config = {
+        ...baseConfig(`http://127.0.0.1:${server.port}`),
+        timeoutMs: 50,
+        coldLoadExtraMs: 100,
+      };
       const tier = await classifyTier(config, "oi");
       expect(tier).toBeNull();
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  it("does not retry on a non-timeout failure (e.g. non-2xx status) -- returns fast", async () => {
+    const server = Bun.serve({ port: 0, fetch: () => new Response("nope", { status: 500 }) });
+    try {
+      const config = {
+        ...baseConfig(`http://127.0.0.1:${server.port}`),
+        timeoutMs: 100,
+        coldLoadExtraMs: 5000,
+      };
+      const start = Date.now();
+      const tier = await classifyTier(config, "oi");
+      expect(tier).toBeNull();
+      // Se tivesse tentado de novo com timeoutMs + coldLoadExtraMs, levaria
+      // bem mais que isso -- prova que o retry só acontece em timeout.
+      expect(Date.now() - start).toBeLessThan(1000);
     } finally {
       server.stop(true);
     }

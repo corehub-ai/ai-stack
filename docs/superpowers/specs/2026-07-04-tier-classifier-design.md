@@ -47,8 +47,12 @@ Client → gateway (:11434) → headroom (:8787, compressão) → tier-classifie
       e header `x-manifest-tier: {CLASSIFIER_TIER}`, timeout curto (`CLASSIFIER_TIMEOUT_MS`).
    d. Sucesso → mapeia o label devolvido pro valor de tier que o agente-alvo (`claude-gateway`) realmente espera
       (§5) e seta `x-manifest-tier` nessa request antes de repassar.
-   e. Erro ou timeout → repassa **sem** header nenhum (fail-open pro "Default routing: regular" que o manifest
-      já faz hoje) — nunca bloqueia a request real.
+   e. Timeout na 1a tentativa (sintoma de cold-load do modelo local, 2026-07-05) → tenta 1 vez a mais
+      com `CLASSIFIER_TIMEOUT_MS + CLASSIFIER_COLD_LOAD_EXTRA_MS`. Qualquer outra falha (status não-2xx,
+      rede, label fora do vocabulário) não tem retry — mais tempo não resolveria um erro que já não é
+      de demora.
+   f. Erro ou timeout (mesmo após o retry) → repassa **sem** header nenhum (fail-open pro "Default
+      routing: regular" que o manifest já faz hoje) — nunca bloqueia a request real.
 4. Todo o resto (streaming, demais headers, corpo) passa transparente, igual ao proxy que o headroom já faz hoje.
 
 ## 4. Config (env vars do serviço `tier-classifier`)
@@ -58,7 +62,8 @@ Client → gateway (:11434) → headroom (:8787, compressão) → tier-classifie
 | `MANIFEST_URL` | Alvo de repasse real (ex.: `http://manifest:2099`) — mesmo padrão de `headroomUrl`/`manifestUrl` já usado em `packages/gateway/src/config.ts`. |
 | `CLASSIFIER_MANIFEST_KEY` | Chave do agente dedicado `tier-classifier` no manifest (padrão `MANIFEST_KEY_*` já usado em `deploy/compose/.env`). |
 | `CLASSIFIER_TIER` | Valor de `x-manifest-tier` a usar na chamada de classificação (esse agente só precisa de uma tier — não precisa de custom routing multi-opção). |
-| `CLASSIFIER_TIMEOUT_MS` | Timeout da chamada de classificação antes do fail-open (default: 1500ms — subido de 800ms após deploy real, 2026-07-04: cold-load de modelo local pode passar de 1s mesmo com GPU). |
+| `CLASSIFIER_TIMEOUT_MS` | Timeout da 1a tentativa de classificação antes do retry/fail-open (default: 1500ms — subido de 800ms após deploy real, 2026-07-04: cold-load de modelo local pode passar de 1s mesmo com GPU). |
+| `CLASSIFIER_COLD_LOAD_EXTRA_MS` | Se a 1a tentativa estourar `CLASSIFIER_TIMEOUT_MS`, quanto tempo extra dar pra 1 retry (default: 15000ms = 15s) antes de desistir e fazer fail-open. Só entra em jogo em timeout — outras falhas não têm retry. |
 
 Docker compose: novo serviço `tier-classifier` (Dockerfile no molde do `packages/gateway/Dockerfile`);
 `headroom.environment.OPENAI_TARGET_API_URL` e `.ANTHROPIC_TARGET_API_URL` passam de `http://manifest:2099`
@@ -100,6 +105,7 @@ mensagem nos dois shapes (OpenAI/Anthropic); mapeamento label→valor de header;
 | Loop acidental `headroom → tier-classifier → headroom` | Chamada de classificação vai direto a `MANIFEST_URL`, nunca a `HEADROOM_URL` (D7) — coberto por teste dedicado |
 | Custo/latência de classificar toda request sem tier explícito | Default local via Ollama (grátis, sem rede externa); trocável no dashboard do manifest sem redeploy se a qualidade não bastar |
 | Manifest descontinuar `rule-based routing` (sunset 2026-09-01) | Este design não depende dessa feature — nada muda quando ela for removida |
+| Cold-load do modelo local (Ollama descarrega após idle, ~5min default) faz a 1a request de cada rajada arriscar timeout | Retry único com `CLASSIFIER_TIMEOUT_MS + CLASSIFIER_COLD_LOAD_EXTRA_MS` (2026-07-05) — troca um pior-caso de latência (até ~2×`CLASSIFIER_TIMEOUT_MS` + `CLASSIFIER_COLD_LOAD_EXTRA_MS`, só quando ambas tentativas estouram) por uma chance real de classificar mesmo com o modelo frio, em vez de fail-open garantido |
 
 ## 8. Fora de escopo
 

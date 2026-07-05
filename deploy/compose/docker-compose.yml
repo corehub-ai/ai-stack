@@ -111,6 +111,7 @@ services:
       - CLASSIFIER_MANIFEST_KEY=${MANIFEST_KEY_TIER_CLASSIFIER}
       - CLASSIFIER_TIER=${CLASSIFIER_TIER:-default}
       - CLASSIFIER_TIMEOUT_MS=${CLASSIFIER_TIMEOUT_MS:-1500}
+      - CLASSIFIER_COLD_LOAD_EXTRA_MS=${CLASSIFIER_COLD_LOAD_EXTRA_MS:-15000}
     depends_on:
       manifest:
         condition: service_healthy

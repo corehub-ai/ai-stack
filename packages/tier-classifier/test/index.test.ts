@@ -13,6 +13,7 @@ function baseConfig(manifestUrl: string): ClassifierConfig {
     manifestKey: "mnfst_test-classifier",
     tier: CLASSIFIER_TIER,
     timeoutMs: 300,
+    coldLoadExtraMs: 1000,
   };
 }
 
@@ -148,6 +149,7 @@ describe("tier-classifier proxy", () => {
         manifestKey: "mnfst_x",
         tier: CLASSIFIER_TIER,
         timeoutMs: 300,
+        coldLoadExtraMs: 1000,
       },
       silent,
     );
@@ -180,6 +182,7 @@ describe("tier-classifier proxy", () => {
         manifestKey: "mnfst_x",
         tier: CLASSIFIER_TIER,
         timeoutMs: 300,
+        coldLoadExtraMs: 1000,
       },
       silent,
     );
