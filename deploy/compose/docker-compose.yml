@@ -182,6 +182,15 @@ services:
     profiles: [local-models]
     environment:
       - OLLAMA_HOST=0.0.0.0
+      # Sem isso o default (~5min) descarrega o modelo da VRAM entre chamadas
+      # espaçadas, forçando cold-load: a 1a tentativa de classificação do
+      # tier-classifier sempre estoura CLASSIFIER_TIMEOUT_MS (1500ms) nesse
+      # caso, e só o retry de cold-load resolve -- achado 2026-07-05 (logs
+      # com -t mostrando o padrão 1a tentativa falha/2a tentativa ~1.44s
+      # depois, correlacionado com `ollama ps` mostrando o modelo descarregado
+      # antes da chamada). 30m mantém o qwen2.5:3b aquecido entre mensagens
+      # normais de uma sessão de chat.
+      - OLLAMA_KEEP_ALIVE=30m
     volumes:
       - ollama_data:/root/.ollama
     # Reserva a GPU nvidia pro container (achado 2026-07-04: o host tem RTX
