@@ -2,13 +2,20 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { type AuthEnv, createAuthMiddleware } from "./auth.js";
 import { type GatewayConfig, loadConfig } from "./config.js";
+import { createRequestLog, defaultLogger, type GatewayLogger } from "./request-log.js";
 import { registerAnthropicRoutes } from "./routes/anthropic.js";
 import { registerHealthRoute } from "./routes/health.js";
 import { registerOllamaRoutes } from "./routes/ollama.js";
 import { registerOpenAiRoutes } from "./routes/openai.js";
 
-export function buildApp(config: GatewayConfig): Hono<AuthEnv> {
+export function buildApp(
+  config: GatewayConfig,
+  logger: GatewayLogger = defaultLogger,
+): Hono<AuthEnv> {
   const app = new Hono<AuthEnv>();
+
+  // Antes de tudo (inclusive do auth middleware) pra logar também os 401.
+  app.use("*", createRequestLog(logger));
 
   if (config.corsOrigins.length > 0) {
     app.use("*", cors({ origin: config.corsOrigins }));
