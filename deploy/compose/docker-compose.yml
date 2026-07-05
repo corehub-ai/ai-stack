@@ -110,7 +110,7 @@ services:
       - MANIFEST_URL=http://manifest:2099
       - CLASSIFIER_MANIFEST_KEY=${MANIFEST_KEY_TIER_CLASSIFIER}
       - CLASSIFIER_TIER=${CLASSIFIER_TIER:-default}
-      - CLASSIFIER_TIMEOUT_MS=${CLASSIFIER_TIMEOUT_MS:-800}
+      - CLASSIFIER_TIMEOUT_MS=${CLASSIFIER_TIMEOUT_MS:-1500}
     depends_on:
       manifest:
         condition: service_healthy
@@ -180,8 +180,9 @@ services:
     # Reserva a GPU nvidia pro container (achado 2026-07-04: o host tem RTX
     # 3060 + runtime nvidia registrado no Docker, mas o container rodava 100%
     # em CPU sem isso -- inferência local inaceitavelmente lenta pro timeout
-    # de 800ms do tier-classifier). Requer NVIDIA Container Toolkit no host
-    # (já confirmado presente: `docker info` lista "Runtimes: nvidia runc").
+    # do tier-classifier (CLASSIFIER_TIMEOUT_MS, 1500ms). Requer NVIDIA
+    # Container Toolkit no host (já confirmado presente: `docker info` lista
+    # "Runtimes: nvidia runc").
     deploy:
       resources:
         reservations:
@@ -204,7 +205,7 @@ services:
   # service_healthy). Idempotente: se o modelo ja existe no volume, o pull
   # retorna rapido sem rebaixar. qwen2.5:3b (2026-07-04) e o modelo do agente
   # tier-classifier no manifest -- escolhido apos testar 5 candidatos: fica
-  # dentro do orcamento de 800ms (CLASSIFIER_TIMEOUT_MS) aquecido e nunca sai
+  # dentro do orcamento (CLASSIFIER_TIMEOUT_MS, 1500ms) aquecido e nunca sai
   # do vocabulario simple/complex/reasoning (qwen3.5:4b tem "thinking mode"
   # que o manifest nao repassa como texto -- content vazio sempre; ver
   # [[ia-stack-goal]]).

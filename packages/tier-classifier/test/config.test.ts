@@ -8,7 +8,7 @@ describe("loadConfig", () => {
     expect(config.manifestUrl).toBe("http://manifest:2099");
     expect(config.manifestKey).toBe("");
     expect(config.tier).toBe("default");
-    expect(config.timeoutMs).toBe(800);
+    expect(config.timeoutMs).toBe(1500);
   });
 
   it("reads every value from env vars", () => {
@@ -33,6 +33,6 @@ describe("loadConfig", () => {
   it("falls back to the default instead of NaN when a numeric env var is non-numeric", () => {
     const config = loadConfig({ CLASSIFIER_PORT: "abc", CLASSIFIER_TIMEOUT_MS: "not-a-number" });
     expect(config.port).toBe(8788);
-    expect(config.timeoutMs).toBe(800);
+    expect(config.timeoutMs).toBe(1500);
   });
 });

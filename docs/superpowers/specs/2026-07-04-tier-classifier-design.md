@@ -58,7 +58,7 @@ Client → gateway (:11434) → headroom (:8787, compressão) → tier-classifie
 | `MANIFEST_URL` | Alvo de repasse real (ex.: `http://manifest:2099`) — mesmo padrão de `headroomUrl`/`manifestUrl` já usado em `packages/gateway/src/config.ts`. |
 | `CLASSIFIER_MANIFEST_KEY` | Chave do agente dedicado `tier-classifier` no manifest (padrão `MANIFEST_KEY_*` já usado em `deploy/compose/.env`). |
 | `CLASSIFIER_TIER` | Valor de `x-manifest-tier` a usar na chamada de classificação (esse agente só precisa de uma tier — não precisa de custom routing multi-opção). |
-| `CLASSIFIER_TIMEOUT_MS` | Timeout da chamada de classificação antes do fail-open (default sugerido: 800ms). |
+| `CLASSIFIER_TIMEOUT_MS` | Timeout da chamada de classificação antes do fail-open (default: 1500ms — subido de 800ms após deploy real, 2026-07-04: cold-load de modelo local pode passar de 1s mesmo com GPU). |
 
 Docker compose: novo serviço `tier-classifier` (Dockerfile no molde do `packages/gateway/Dockerfile`);
 `headroom.environment.OPENAI_TARGET_API_URL` e `.ANTHROPIC_TARGET_API_URL` passam de `http://manifest:2099`

@@ -27,6 +27,6 @@ export function loadConfig(
     manifestUrl: stripTrailingSlash(env.MANIFEST_URL ?? "http://manifest:2099"),
     manifestKey: env.CLASSIFIER_MANIFEST_KEY ?? "",
     tier: env.CLASSIFIER_TIER ?? "default",
-    timeoutMs: parseNumber(env.CLASSIFIER_TIMEOUT_MS, 800),
+    timeoutMs: parseNumber(env.CLASSIFIER_TIMEOUT_MS, 1500),
   };
 }
