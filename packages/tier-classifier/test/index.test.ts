@@ -89,14 +89,15 @@ describe("tier-classifier proxy", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ messages: [{ role: "user", content: "refatora tudo" }] }),
       });
-      expect(logs).toHaveLength(1);
-      expect(logs[0]).toMatchObject({
+      const decisions = logs.filter((l) => l.event === "tier-classifier.decision");
+      expect(decisions).toHaveLength(1);
+      expect(decisions[0]).toMatchObject({
         event: "tier-classifier.decision",
         tier: "complex",
         failOpen: false,
       });
-      expect(typeof logs[0]?.latencyMs).toBe("number");
-      expect(logs[0]?.reason).toBeUndefined();
+      expect(typeof decisions[0]?.latencyMs).toBe("number");
+      expect(decisions[0]?.reason).toBeUndefined();
     } finally {
       mock.stop();
     }
@@ -129,12 +130,14 @@ describe("tier-classifier proxy", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ messages: [{ role: "user", content: "oi" }] }),
       });
-      expect(logs).toHaveLength(1);
-      expect(logs[0]).toMatchObject({
+      const decisions = logs.filter((l) => l.event === "tier-classifier.decision");
+      expect(decisions).toHaveLength(1);
+      expect(decisions[0]).toMatchObject({
         event: "tier-classifier.decision",
         tier: null,
         failOpen: true,
         reason: "classification-failed",
+        failure: { kind: "invalid-label" },
       });
     } finally {
       mock.stop();
@@ -234,6 +237,86 @@ describe("tier-classifier proxy", () => {
       expect(res.headers.get("content-length")).not.toBe(String(compressed.byteLength));
       const json = await res.json();
       expect(json).toEqual(payload);
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  it("logs a tier-classifier.forward entry with the model the manifest returned (reveals fallback swaps)", async () => {
+    const server = Bun.serve({
+      port: 0,
+      fetch: () => Response.json({ model: "glm-5.2", choices: [{ message: { content: "ok" } }] }),
+    });
+    const logs: Record<string, unknown>[] = [];
+    try {
+      const app = buildApp(baseConfig(`http://127.0.0.1:${server.port}`), (e) => logs.push(e));
+      // x-manifest-tier já setado -> sem classificação, só o forward
+      const res = await app.request("/v1/messages", {
+        method: "POST",
+        headers: { "x-manifest-tier": "reasoning", "content-type": "application/json" },
+        body: JSON.stringify({ messages: [{ role: "user", content: "oi" }] }),
+      });
+      expect(res.status).toBe(200);
+      const forwards = logs.filter((l) => l.event === "tier-classifier.forward");
+      expect(forwards).toHaveLength(1);
+      expect(forwards[0]).toMatchObject({
+        event: "tier-classifier.forward",
+        path: "/v1/messages",
+        status: 200,
+        responseModel: "glm-5.2",
+      });
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  it("logs status + a manifestError snippet when the manifest forward returns non-2xx", async () => {
+    const server = Bun.serve({
+      port: 0,
+      fetch: () =>
+        new Response(JSON.stringify({ error: { message: "prompt is too long" } }), {
+          status: 400,
+          headers: { "content-type": "application/json" },
+        }),
+    });
+    const logs: Record<string, unknown>[] = [];
+    try {
+      const app = buildApp(baseConfig(`http://127.0.0.1:${server.port}`), (e) => logs.push(e));
+      const res = await app.request("/v1/messages", {
+        method: "POST",
+        headers: { "x-manifest-tier": "reasoning", "content-type": "application/json" },
+        body: JSON.stringify({ messages: [{ role: "user", content: "oi" }] }),
+      });
+      expect(res.status).toBe(400);
+      const forwards = logs.filter((l) => l.event === "tier-classifier.forward");
+      expect(forwards[0]).toMatchObject({ status: 400 });
+      expect(String(forwards[0]?.manifestError)).toContain("prompt is too long");
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  it("passes streaming (text/event-stream) responses through untouched and logs streaming:true", async () => {
+    const sse = 'data: {"model":"claude-opus-4-8"}\n\ndata: [DONE]\n\n';
+    const server = Bun.serve({
+      port: 0,
+      fetch: () =>
+        new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } }),
+    });
+    const logs: Record<string, unknown>[] = [];
+    try {
+      const app = buildApp(baseConfig(`http://127.0.0.1:${server.port}`), (e) => logs.push(e));
+      const res = await app.request("/v1/messages", {
+        method: "POST",
+        headers: { "x-manifest-tier": "reasoning", "content-type": "application/json" },
+        body: JSON.stringify({ messages: [{ role: "user", content: "oi" }] }),
+      });
+      expect(res.status).toBe(200);
+      expect(await res.text()).toBe(sse);
+      const forwards = logs.filter((l) => l.event === "tier-classifier.forward");
+      expect(forwards[0]).toMatchObject({ streaming: true, status: 200 });
+      // não bufferiza streaming -> não extrai responseModel
+      expect(forwards[0]?.responseModel).toBeUndefined();
     } finally {
       server.stop(true);
     }

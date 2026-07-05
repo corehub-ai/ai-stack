@@ -10,6 +10,25 @@ export type ClassifierLogger = (entry: Record<string, unknown>) => void;
 
 const defaultLogger: ClassifierLogger = (entry) => console.log(JSON.stringify(entry));
 
+// Extrai o `model` de uma resposta JSON do manifest (OpenAI e Anthropic shapes
+// têm ambos um `model` no topo). É o sinal que revela o fallback silencioso do
+// manifest -- undefined se o corpo não for JSON ou não tiver `model`.
+function extractResponseModel(text: string): string | undefined {
+  try {
+    const json: unknown = JSON.parse(text);
+    if (
+      typeof json === "object" &&
+      json !== null &&
+      typeof (json as { model?: unknown }).model === "string"
+    ) {
+      return (json as { model: string }).model;
+    }
+  } catch {
+    // corpo não-JSON (ex.: erro em texto puro) -- sem model a extrair
+  }
+  return undefined;
+}
+
 async function checkManifest(manifestUrl: string): Promise<{ ok: boolean; detail: string }> {
   try {
     const res = await fetch(`${manifestUrl}/api/v1/health`, { signal: AbortSignal.timeout(3000) });
@@ -52,25 +71,33 @@ export function buildApp(config: ClassifierConfig, logger: ClassifierLogger = de
         parsedBody = null;
       }
       const userMessage = extractLastUserMessage(parsedBody);
-      const tier = userMessage !== null ? await classifyTier(config, userMessage) : null;
+      const result = userMessage !== null ? await classifyTier(config, userMessage) : null;
+      const tier = result?.tier ?? null;
       if (tier !== null) headers[TIER_HEADER] = tier;
 
       // Observabilidade content-free (spec §5): sem isso, uma chave/tier mal
       // configurada faz TODA classificação cair em fail-open silenciosamente,
       // sem nenhum sinal em log ou no /health (achado da revisão final,
-      // 2026-07-04).
+      // 2026-07-04). `failure` detalha o motivo do fail-open (achado
+      // 2026-07-05): http-error (com status+corpo do manifest), timeout,
+      // network-error ou invalid-label -- distingue agente mal configurado
+      // de cold-load de modelo cuspindo lixo.
       logger({
         event: "tier-classifier.decision",
         tier,
         latencyMs: Math.round(performance.now() - startedAt),
         failOpen: tier === null,
         ...(tier === null
-          ? { reason: userMessage === null ? "no-user-message" : "classification-failed" }
+          ? {
+              reason: userMessage === null ? "no-user-message" : "classification-failed",
+              ...(result?.failure ? { failure: result.failure } : {}),
+            }
           : {}),
       });
     }
 
     const url = new URL(c.req.url);
+    const forwardStartedAt = performance.now();
     let upstream: Response;
     try {
       upstream = await fetch(`${config.manifestUrl}${url.pathname}${url.search}`, {
@@ -78,7 +105,15 @@ export function buildApp(config: ClassifierConfig, logger: ClassifierLogger = de
         headers,
         body: bodyText.length > 0 ? bodyText : undefined,
       });
-    } catch {
+    } catch (err) {
+      logger({
+        event: "tier-classifier.forward",
+        method: c.req.method,
+        path: url.pathname,
+        status: 502,
+        latencyMs: Math.round(performance.now() - forwardStartedAt),
+        error: `unreachable: ${err instanceof Error ? err.message : String(err)}`,
+      });
       return c.json(
         {
           error: {
@@ -96,7 +131,35 @@ export function buildApp(config: ClassifierConfig, logger: ClassifierLogger = de
     const responseHeaders = new Headers(upstream.headers);
     responseHeaders.delete("content-encoding");
     responseHeaders.delete("content-length");
-    return new Response(upstream.body, { status: upstream.status, headers: responseHeaders });
+
+    const forwardLog: Record<string, unknown> = {
+      event: "tier-classifier.forward",
+      method: c.req.method,
+      path: url.pathname,
+      status: upstream.status,
+      latencyMs: Math.round(performance.now() - forwardStartedAt),
+    };
+
+    // Resposta streaming (SSE): não dá pra ler o corpo sem quebrar o stream --
+    // loga só status/latência e repassa intacto. Limitação: o modelo real numa
+    // resposta streaming (e portanto o fallback do manifest) não é observável
+    // aqui; use uma request não-streaming pra ver o responseModel.
+    if ((upstream.headers.get("content-type") ?? "").includes("text/event-stream")) {
+      forwardLog.streaming = true;
+      logger(forwardLog);
+      return new Response(upstream.body, { status: upstream.status, headers: responseHeaders });
+    }
+
+    // Não-streaming: bufferiza (corpo limitado) pra registrar o `model` que o
+    // manifest devolveu -- revela o fallback silencioso (pediu opus, veio
+    // glm-5.2) que o manifest mascara como 200 (achado 2026-07-05) -- e, em
+    // erro não-mascarado, um trecho do corpo do manifest.
+    const responseText = await upstream.text();
+    const responseModel = extractResponseModel(responseText);
+    if (responseModel !== undefined) forwardLog.responseModel = responseModel;
+    if (!upstream.ok) forwardLog.manifestError = responseText.slice(0, 500);
+    logger(forwardLog);
+    return new Response(responseText, { status: upstream.status, headers: responseHeaders });
   });
 
   return app;

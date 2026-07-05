@@ -26,11 +26,12 @@ describe("classifyTier", () => {
   it("returns the parsed label on a clean response", async () => {
     const server = Bun.serve({ port: 0, fetch: () => anthropicTextResponse("complex") });
     try {
-      const tier = await classifyTier(
+      const { tier, failure } = await classifyTier(
         baseConfig(`http://127.0.0.1:${server.port}`),
         "refatora esse módulo inteiro",
       );
       expect(tier).toBe("complex");
+      expect(failure).toBeUndefined();
     } finally {
       server.stop(true);
     }
@@ -39,7 +40,7 @@ describe("classifyTier", () => {
   it("trims punctuation/case noise around the label", async () => {
     const server = Bun.serve({ port: 0, fetch: () => anthropicTextResponse("  Reasoning.\n") });
     try {
-      const tier = await classifyTier(
+      const { tier } = await classifyTier(
         baseConfig(`http://127.0.0.1:${server.port}`),
         "pensa nas opções",
       );
@@ -76,21 +77,32 @@ describe("classifyTier", () => {
     }
   });
 
-  it("returns null when the response label is not simple/complex/reasoning", async () => {
+  it("returns a invalid-label failure when the response label is not simple/complex/reasoning", async () => {
     const server = Bun.serve({ port: 0, fetch: () => anthropicTextResponse("maybe idk") });
     try {
-      const tier = await classifyTier(baseConfig(`http://127.0.0.1:${server.port}`), "oi");
+      const { tier, failure } = await classifyTier(
+        baseConfig(`http://127.0.0.1:${server.port}`),
+        "oi",
+      );
       expect(tier).toBeNull();
+      expect(failure).toEqual({ kind: "invalid-label", raw: "maybe idk" });
     } finally {
       server.stop(true);
     }
   });
 
-  it("returns null when manifest responds with a non-2xx status", async () => {
-    const server = Bun.serve({ port: 0, fetch: () => new Response("nope", { status: 500 }) });
+  it("returns an http-error failure (with status + body snippet) on a non-2xx status", async () => {
+    const server = Bun.serve({
+      port: 0,
+      fetch: () => new Response("upstream boom", { status: 500 }),
+    });
     try {
-      const tier = await classifyTier(baseConfig(`http://127.0.0.1:${server.port}`), "oi");
+      const { tier, failure } = await classifyTier(
+        baseConfig(`http://127.0.0.1:${server.port}`),
+        "oi",
+      );
       expect(tier).toBeNull();
+      expect(failure).toEqual({ kind: "http-error", status: 500, bodySnippet: "upstream boom" });
     } finally {
       server.stop(true);
     }
@@ -112,14 +124,14 @@ describe("classifyTier", () => {
         timeoutMs: 100,
         coldLoadExtraMs: 300,
       };
-      const tier = await classifyTier(config, "refatora esse módulo inteiro");
+      const { tier } = await classifyTier(config, "refatora esse módulo inteiro");
       expect(tier).toBe("complex");
     } finally {
       server.stop(true);
     }
   });
 
-  it("returns null (fail-open) when even the retry times out", async () => {
+  it("returns a timeout failure (fail-open) when even the retry times out", async () => {
     const server = Bun.serve({
       port: 0,
       async fetch() {
@@ -133,8 +145,9 @@ describe("classifyTier", () => {
         timeoutMs: 50,
         coldLoadExtraMs: 100,
       };
-      const tier = await classifyTier(config, "oi");
+      const { tier, failure } = await classifyTier(config, "oi");
       expect(tier).toBeNull();
+      expect(failure).toEqual({ kind: "timeout" });
     } finally {
       server.stop(true);
     }
@@ -149,7 +162,7 @@ describe("classifyTier", () => {
         coldLoadExtraMs: 5000,
       };
       const start = Date.now();
-      const tier = await classifyTier(config, "oi");
+      const { tier } = await classifyTier(config, "oi");
       expect(tier).toBeNull();
       // Se tivesse tentado de novo com timeoutMs + coldLoadExtraMs, levaria
       // bem mais que isso -- prova que o retry só acontece em timeout.
@@ -159,9 +172,10 @@ describe("classifyTier", () => {
     }
   });
 
-  it("returns null when the manifest URL is unreachable", async () => {
-    const tier = await classifyTier(baseConfig("http://127.0.0.1:1"), "oi");
+  it("returns a network-error failure when the manifest URL is unreachable", async () => {
+    const { tier, failure } = await classifyTier(baseConfig("http://127.0.0.1:1"), "oi");
     expect(tier).toBeNull();
+    expect(failure?.kind).toBe("network-error");
   });
 
   it("skips null/non-object entries in the response content array instead of throwing", async () => {
@@ -176,7 +190,7 @@ describe("classifyTier", () => {
         }),
     });
     try {
-      const tier = await classifyTier(baseConfig(`http://127.0.0.1:${server.port}`), "oi");
+      const { tier } = await classifyTier(baseConfig(`http://127.0.0.1:${server.port}`), "oi");
       expect(tier).toBe("simple");
     } finally {
       server.stop(true);
