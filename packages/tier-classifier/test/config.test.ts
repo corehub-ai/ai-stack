@@ -11,6 +11,12 @@ describe("loadConfig", () => {
     expect(config.timeoutMs).toBe(1500);
     expect(config.coldLoadExtraMs).toBe(15000);
     expect(config.canonicalize).toBe(true);
+    expect(config.canonicalizeBypass).toEqual([]);
+  });
+
+  it("parses CLASSIFIER_CANONICALIZE_BYPASS as a trimmed comma-separated list of keys", () => {
+    const config = loadConfig({ CLASSIFIER_CANONICALIZE_BYPASS: " mnfst_a , mnfst_b ,, mnfst_c " });
+    expect(config.canonicalizeBypass).toEqual(["mnfst_a", "mnfst_b", "mnfst_c"]);
   });
 
   it("reads every value from env vars", () => {

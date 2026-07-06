@@ -201,6 +201,16 @@ usada para essas rotas):
   removeu algo; nunca lança. Config `CLASSIFIER_CANONICALIZE` (default true) é
   kill-switch. O log `tier-classifier.forward` ganha `stripped: [...]` (só nomes de
   chave, nunca valores).
+- **D9 — Bypass por harness destino (2026-07-06).** `CLASSIFIER_CANONICALIZE_BYPASS`
+  = lista de credenciais (chaves de harness) separadas por vírgula; requests
+  carregando uma delas pulam a canonização. Racional: o Claude Code (harness
+  `Claude-Gateway`) manda `thinking`/params próprios que quer preservar, enquanto o
+  Copilot (`ollama-harness`) precisa da limpeza. **Restrição estrutural:** o
+  tier-classifier não enxerga o NOME do harness destino, só a credencial que a
+  request carrega (Bearer ou x-api-key) -- e cada harness = uma chave `mnfst_`;
+  então o bypass é por chave, casado contra a lista. Config no compose defaulta pra
+  `${MANIFEST_KEY_CLAUDE_CODE}`. O credencial nunca é logado; o forward ganha
+  `canonicalizeBypassed: true` quando aplica.
 - **Não resolvido por aqui:** (a) `claude-sonnet-4-6` → `400 "You're out of extra
   usage"` (créditos da assinatura, nível de conta); (b) o fallback `glm-5.2` →
   `401 Unauthorized` (auth do opencode-go/ollama-cloud) — ambos fora do escopo da

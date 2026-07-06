@@ -30,6 +30,21 @@ function extractResponseModel(text: string): string | undefined {
   return undefined;
 }
 
+// True se a credencial da request (Bearer <chave> ou x-api-key: <chave>) está
+// na lista de bypass. O tier-classifier não enxerga o nome do harness destino,
+// só a credencial -- e cada harness = uma chave mnfst_. Nunca loga o valor.
+function credentialInList(
+  authorization: string | undefined,
+  apiKey: string | undefined,
+  list: string[],
+): boolean {
+  if (authorization !== undefined) {
+    const token = /^Bearer\s+(.+)$/i.exec(authorization.trim())?.[1];
+    if (token !== undefined && list.includes(token.trim())) return true;
+  }
+  return apiKey !== undefined && list.includes(apiKey.trim());
+}
+
 async function checkManifest(manifestUrl: string): Promise<{ ok: boolean; detail: string }> {
   try {
     const res = await fetch(`${manifestUrl}/api/v1/health`, { signal: AbortSignal.timeout(3000) });
@@ -98,13 +113,25 @@ export function buildApp(config: ClassifierConfig, logger: ClassifierLogger = de
     }
 
     const url = new URL(c.req.url);
+    // Bypass da canonização por credencial (chave do harness destino): o
+    // tier-classifier só enxerga a credencial, não o nome do harness -- cada
+    // harness = uma chave mnfst_ (CLASSIFIER_CANONICALIZE_BYPASS). Ex.: o
+    // Claude Code manda sua própria chave e quer preservar thinking/params.
+    const bypassCanonicalize =
+      config.canonicalizeBypass.length > 0 &&
+      credentialInList(
+        c.req.header("authorization"),
+        c.req.header("x-api-key"),
+        config.canonicalizeBypass,
+      );
     // Remove params de sampling/thinking que o manifest é dono de definir por
     // tier -- evita o 400 da Anthropic (temperature≠1 + thinking) e afins
     // (spec 2026-07-05-ollama-facade-harness §adendo). Fail-safe embutido:
     // corpo vazio/não-JSON passa intacto.
-    const { body: forwardBody, stripped } = config.canonicalize
-      ? canonicalizeBody(bodyText)
-      : { body: bodyText, stripped: [] as string[] };
+    const { body: forwardBody, stripped } =
+      config.canonicalize && !bypassCanonicalize
+        ? canonicalizeBody(bodyText)
+        : { body: bodyText, stripped: [] as string[] };
     const forwardStartedAt = performance.now();
     let upstream: Response;
     try {
@@ -121,6 +148,7 @@ export function buildApp(config: ClassifierConfig, logger: ClassifierLogger = de
         status: 502,
         latencyMs: Math.round(performance.now() - forwardStartedAt),
         ...(stripped.length > 0 ? { stripped } : {}),
+        ...(bypassCanonicalize ? { canonicalizeBypassed: true } : {}),
         error: `unreachable: ${err instanceof Error ? err.message : String(err)}`,
       });
       return c.json(
@@ -148,6 +176,7 @@ export function buildApp(config: ClassifierConfig, logger: ClassifierLogger = de
       status: upstream.status,
       latencyMs: Math.round(performance.now() - forwardStartedAt),
       ...(stripped.length > 0 ? { stripped } : {}),
+      ...(bypassCanonicalize ? { canonicalizeBypassed: true } : {}),
     };
 
     // Resposta streaming (SSE): não dá pra ler o corpo sem quebrar o stream --

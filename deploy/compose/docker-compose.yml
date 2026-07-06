@@ -123,6 +123,12 @@ services:
       # Anthropic "temperature may only be set to 1 when thinking is enabled"
       # (achado 2026-07-05). "false" desliga.
       - CLASSIFIER_CANONICALIZE=${CLASSIFIER_CANONICALIZE:-true}
+      # Harnesses (por CHAVE, não por nome -- o tier-classifier só vê a
+      # credencial) cujas requests pulam a canonização. Default: a chave do
+      # Claude-Gateway, porque o Claude Code manda thinking/params próprios que
+      # quer preservar. Pra bypassar mais harnesses, edite pra lista separada
+      # por vírgula: ${MANIFEST_KEY_CLAUDE_CODE},${MANIFEST_KEY_OUTRO}
+      - CLASSIFIER_CANONICALIZE_BYPASS=${MANIFEST_KEY_CLAUDE_CODE:-}
     depends_on:
       manifest:
         condition: service_healthy

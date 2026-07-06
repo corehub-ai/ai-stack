@@ -11,6 +11,7 @@ function baseConfig(manifestUrl: string): ClassifierConfig {
     timeoutMs: 300,
     coldLoadExtraMs: 1000,
     canonicalize: true,
+    canonicalizeBypass: [],
   };
 }
 

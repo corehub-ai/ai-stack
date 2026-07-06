@@ -15,6 +15,7 @@ function baseConfig(manifestUrl: string): ClassifierConfig {
     timeoutMs: 300,
     coldLoadExtraMs: 1000,
     canonicalize: true,
+    canonicalizeBypass: [],
   };
 }
 
@@ -155,6 +156,7 @@ describe("tier-classifier proxy", () => {
         timeoutMs: 300,
         coldLoadExtraMs: 1000,
         canonicalize: true,
+        canonicalizeBypass: [],
       },
       silent,
     );
@@ -189,6 +191,7 @@ describe("tier-classifier proxy", () => {
         timeoutMs: 300,
         coldLoadExtraMs: 1000,
         canonicalize: true,
+        canonicalizeBypass: [],
       },
       silent,
     );
@@ -393,6 +396,101 @@ describe("tier-classifier proxy", () => {
       expect(forwarded.temperature).toBe(0.2);
       const forwards = logs.filter((l) => l.event === "tier-classifier.forward");
       expect(forwards[0]?.stripped).toBeUndefined();
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  it("bypasses canonicalization for a request whose credential (Bearer) is in the bypass list", async () => {
+    let seenBody = "";
+    const server = Bun.serve({
+      port: 0,
+      async fetch(req) {
+        seenBody = await req.text();
+        return Response.json({ ok: true });
+      },
+    });
+    const logs: Record<string, unknown>[] = [];
+    try {
+      const config = {
+        ...baseConfig(`http://127.0.0.1:${server.port}`),
+        canonicalizeBypass: ["mnfst_bypass"],
+      };
+      const app = buildApp(config, (e) => logs.push(e));
+      await app.request("/v1/messages", {
+        method: "POST",
+        headers: {
+          "x-manifest-tier": "reasoning",
+          "content-type": "application/json",
+          authorization: "Bearer mnfst_bypass",
+        },
+        body: JSON.stringify({ messages: [{ role: "user", content: "oi" }], temperature: 0.2 }),
+      });
+      // temperature preservado -- a canonização foi pulada
+      expect((JSON.parse(seenBody) as Record<string, unknown>).temperature).toBe(0.2);
+      const forwards = logs.filter((l) => l.event === "tier-classifier.forward");
+      expect(forwards[0]).toMatchObject({ canonicalizeBypassed: true });
+      expect(forwards[0]?.stripped).toBeUndefined();
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  it("bypasses canonicalization when the bypass credential arrives via x-api-key", async () => {
+    let seenBody = "";
+    const server = Bun.serve({
+      port: 0,
+      async fetch(req) {
+        seenBody = await req.text();
+        return Response.json({ ok: true });
+      },
+    });
+    try {
+      const config = {
+        ...baseConfig(`http://127.0.0.1:${server.port}`),
+        canonicalizeBypass: ["mnfst_bypass"],
+      };
+      const app = buildApp(config, silent);
+      await app.request("/v1/messages", {
+        method: "POST",
+        headers: {
+          "x-manifest-tier": "reasoning",
+          "content-type": "application/json",
+          "x-api-key": "mnfst_bypass",
+        },
+        body: JSON.stringify({ messages: [{ role: "user", content: "oi" }], temperature: 0.2 }),
+      });
+      expect((JSON.parse(seenBody) as Record<string, unknown>).temperature).toBe(0.2);
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  it("still canonicalizes a request whose credential is NOT in the bypass list", async () => {
+    let seenBody = "";
+    const server = Bun.serve({
+      port: 0,
+      async fetch(req) {
+        seenBody = await req.text();
+        return Response.json({ ok: true });
+      },
+    });
+    try {
+      const config = {
+        ...baseConfig(`http://127.0.0.1:${server.port}`),
+        canonicalizeBypass: ["mnfst_bypass"],
+      };
+      const app = buildApp(config, silent);
+      await app.request("/v1/messages", {
+        method: "POST",
+        headers: {
+          "x-manifest-tier": "reasoning",
+          "content-type": "application/json",
+          authorization: "Bearer mnfst_other",
+        },
+        body: JSON.stringify({ messages: [{ role: "user", content: "oi" }], temperature: 0.2 }),
+      });
+      expect((JSON.parse(seenBody) as Record<string, unknown>).temperature).toBeUndefined();
     } finally {
       server.stop(true);
     }

@@ -6,10 +6,19 @@ export type ClassifierConfig = {
   timeoutMs: number;
   coldLoadExtraMs: number;
   canonicalize: boolean;
+  /** credenciais (chaves de harness) cujas requests pulam a canonização */
+  canonicalizeBypass: string[];
 };
 
 function stripTrailingSlash(url: string): string {
   return url.endsWith("/") ? url.slice(0, -1) : url;
+}
+
+function splitList(value: string | undefined): string[] {
+  return (value ?? "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
 }
 
 // Number("abc") vira NaN sem avisar -- Bun.serve({port: NaN}) falha na subida
@@ -45,5 +54,6 @@ export function loadConfig(
     // (achado 2026-07-05) -- ver retry em classify.ts.
     coldLoadExtraMs: parseNumber(env.CLASSIFIER_COLD_LOAD_EXTRA_MS, 15000),
     canonicalize: parseBoolean(env.CLASSIFIER_CANONICALIZE, true),
+    canonicalizeBypass: splitList(env.CLASSIFIER_CANONICALIZE_BYPASS),
   };
 }
