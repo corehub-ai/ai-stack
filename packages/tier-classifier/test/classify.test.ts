@@ -12,6 +12,7 @@ function baseConfig(manifestUrl: string): ClassifierConfig {
     coldLoadExtraMs: 1000,
     canonicalize: true,
     canonicalizeBypass: [],
+    maxInputChars: 6000,
   };
 }
 
@@ -178,6 +179,46 @@ describe("classifyTier", () => {
     const { tier, failure } = await classifyTier(baseConfig("http://127.0.0.1:1"), "oi");
     expect(tier).toBeNull();
     expect(failure?.kind).toBe("network-error");
+  });
+
+  it("truncates a user message longer than maxInputChars before sending it to the classifier", async () => {
+    let seenContent = "";
+    const server = Bun.serve({
+      port: 0,
+      async fetch(req) {
+        const body = (await req.json()) as { messages: Array<{ content: string }> };
+        seenContent = body.messages[0]?.content ?? "";
+        return anthropicTextResponse("complex");
+      },
+    });
+    try {
+      const config = { ...baseConfig(`http://127.0.0.1:${server.port}`), maxInputChars: 100 };
+      const { tier } = await classifyTier(config, "x".repeat(5000));
+      expect(tier).toBe("complex");
+      // truncado bem abaixo do original (100 + marcador curto), nunca os 5000
+      expect(seenContent.length).toBeLessThan(200);
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  it("sends a message at/under maxInputChars unchanged", async () => {
+    let seenContent = "";
+    const server = Bun.serve({
+      port: 0,
+      async fetch(req) {
+        const body = (await req.json()) as { messages: Array<{ content: string }> };
+        seenContent = body.messages[0]?.content ?? "";
+        return anthropicTextResponse("simple");
+      },
+    });
+    try {
+      const config = { ...baseConfig(`http://127.0.0.1:${server.port}`), maxInputChars: 100 };
+      await classifyTier(config, "mensagem curta");
+      expect(seenContent).toBe("mensagem curta");
+    } finally {
+      server.stop(true);
+    }
   });
 
   it("skips null/non-object entries in the response content array instead of throwing", async () => {

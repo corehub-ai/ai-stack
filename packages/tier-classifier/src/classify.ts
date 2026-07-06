@@ -63,6 +63,17 @@ function errMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+// Mensagem maior que a janela de contexto do modelo classificador faz o
+// context-shift do Ollama empurrar o system prompt pra fora -- o modelo passa
+// a RESPONDER o conteúdo em vez de classificá-lo (achado 2026-07-06: qwen2.5:3b
+// com n_ctx=4096 descarrilava em inputs >~40KB, devolvendo prosa -> invalid-label).
+// Um prefixo já carrega sinal de complexidade suficiente; truncar mantém
+// qualquer modelo na tarefa e barateia a chamada.
+function truncateForClassification(message: string, maxChars: number): string {
+  if (message.length <= maxChars) return message;
+  return `${message.slice(0, maxChars)} […truncado para classificação]`;
+}
+
 async function attemptClassify(
   config: ClassifierConfig,
   userMessage: string,
@@ -119,8 +130,9 @@ export async function classifyTier(
   config: ClassifierConfig,
   userMessage: string,
 ): Promise<ClassifyResult> {
+  const message = truncateForClassification(userMessage, config.maxInputChars);
   try {
-    return await attemptClassify(config, userMessage, config.timeoutMs);
+    return await attemptClassify(config, message, config.timeoutMs);
   } catch (err) {
     if (!isTimeoutError(err)) {
       return { tier: null, failure: { kind: "network-error", detail: errMessage(err) } };
@@ -128,7 +140,7 @@ export async function classifyTier(
     // timeout na 1a tentativa = sintoma de cold-load -> retry com budget estendido
   }
   try {
-    return await attemptClassify(config, userMessage, config.timeoutMs + config.coldLoadExtraMs);
+    return await attemptClassify(config, message, config.timeoutMs + config.coldLoadExtraMs);
   } catch (err) {
     return {
       tier: null,

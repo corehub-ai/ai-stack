@@ -16,6 +16,7 @@ function baseConfig(manifestUrl: string): ClassifierConfig {
     coldLoadExtraMs: 1000,
     canonicalize: true,
     canonicalizeBypass: [],
+    maxInputChars: 6000,
   };
 }
 
@@ -157,6 +158,7 @@ describe("tier-classifier proxy", () => {
         coldLoadExtraMs: 1000,
         canonicalize: true,
         canonicalizeBypass: [],
+        maxInputChars: 6000,
       },
       silent,
     );
@@ -192,6 +194,7 @@ describe("tier-classifier proxy", () => {
         coldLoadExtraMs: 1000,
         canonicalize: true,
         canonicalizeBypass: [],
+        maxInputChars: 6000,
       },
       silent,
     );

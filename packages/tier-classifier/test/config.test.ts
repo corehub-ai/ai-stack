@@ -12,6 +12,7 @@ describe("loadConfig", () => {
     expect(config.coldLoadExtraMs).toBe(15000);
     expect(config.canonicalize).toBe(true);
     expect(config.canonicalizeBypass).toEqual([]);
+    expect(config.maxInputChars).toBe(6000);
   });
 
   it("parses CLASSIFIER_CANONICALIZE_BYPASS as a trimmed comma-separated list of keys", () => {
@@ -28,6 +29,7 @@ describe("loadConfig", () => {
       CLASSIFIER_TIMEOUT_MS: "500",
       CLASSIFIER_COLD_LOAD_EXTRA_MS: "20000",
       CLASSIFIER_CANONICALIZE: "false",
+      CLASSIFIER_MAX_INPUT_CHARS: "3000",
     });
     expect(config.port).toBe(9999);
     expect(config.manifestKey).toBe("mnfst_tier-classifier");
@@ -35,6 +37,7 @@ describe("loadConfig", () => {
     expect(config.timeoutMs).toBe(500);
     expect(config.coldLoadExtraMs).toBe(20000);
     expect(config.canonicalize).toBe(false);
+    expect(config.maxInputChars).toBe(3000);
   });
 
   it("treats CLASSIFIER_CANONICALIZE=0/off as false and anything else as the default (true)", () => {

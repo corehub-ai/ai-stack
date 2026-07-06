@@ -88,6 +88,13 @@ apontando pro Ollama local.
   no dashboard do manifest quebre o classificador.
 - Nunca loga conteúdo de mensagem do usuário — só metadata (tier escolhido, latência, se caiu em
   fail-open), seguindo a mesma regra de privacidade já aplicada nas investigações desta sessão.
+- **Truncação do input (achado 2026-07-06):** a mensagem é truncada a `CLASSIFIER_MAX_INPUT_CHARS`
+  (default 6000) antes de ir ao classificador. Mensagem maior que a janela de contexto do modelo
+  (qwen2.5:3b = 4096 tokens) fazia o `context-shift` do Ollama empurrar o system prompt pra fora — o
+  modelo passava a RESPONDER o conteúdo (prosa/`<thinking>`/JSON) em vez de classificar, virando
+  `invalid-label` → fail-open → default. Reproduzido: qwen2.5:3b classifica certo até ~8KB e descarrila
+  a partir de ~39KB; truncar pra 6000 chars restaura a classificação (100% consistente no teste). Um
+  prefixo carrega sinal de complexidade suficiente; é model-agnostic e barateia a chamada.
 
 ## 6. Testes
 

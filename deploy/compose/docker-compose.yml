@@ -129,6 +129,12 @@ services:
       # quer preservar. Pra bypassar mais harnesses, edite pra lista separada
       # por vírgula: ${MANIFEST_KEY_CLAUDE_CODE},${MANIFEST_KEY_OUTRO}
       - CLASSIFIER_CANONICALIZE_BYPASS=${MANIFEST_KEY_CLAUDE_CODE:-}
+      # Teto de chars da mensagem enviada ao classificador -- maior que isso é
+      # truncado. Sem isso, mensagem grande (análise de código/transcript)
+      # estoura a janela de contexto do modelo local (qwen2.5:3b = 4096 tokens),
+      # o context-shift descarta o system prompt e o modelo responde o conteúdo
+      # em vez de classificar -> fail-open pra default (achado 2026-07-06).
+      - CLASSIFIER_MAX_INPUT_CHARS=${CLASSIFIER_MAX_INPUT_CHARS:-6000}
     depends_on:
       manifest:
         condition: service_healthy

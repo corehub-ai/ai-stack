@@ -8,6 +8,9 @@ export type ClassifierConfig = {
   canonicalize: boolean;
   /** credenciais (chaves de harness) cujas requests pulam a canonização */
   canonicalizeBypass: string[];
+  /** teto de chars da mensagem enviada ao classificador (evita estourar a
+   * janela de contexto do modelo -- ver classify.ts) */
+  maxInputChars: number;
 };
 
 function stripTrailingSlash(url: string): string {
@@ -55,5 +58,6 @@ export function loadConfig(
     coldLoadExtraMs: parseNumber(env.CLASSIFIER_COLD_LOAD_EXTRA_MS, 15000),
     canonicalize: parseBoolean(env.CLASSIFIER_CANONICALIZE, true),
     canonicalizeBypass: splitList(env.CLASSIFIER_CANONICALIZE_BYPASS),
+    maxInputChars: parseNumber(env.CLASSIFIER_MAX_INPUT_CHARS, 6000),
   };
 }
