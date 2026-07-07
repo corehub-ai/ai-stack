@@ -2,11 +2,24 @@ import type { ClassifierConfig } from "./config.js";
 
 const VALID_TIERS = new Set(["simple", "complex", "reasoning"]);
 
-const SYSTEM_PROMPT = `Classifique a próxima mensagem do usuário em exatamente uma palavra: simple, complex ou reasoning.
-- simple: perguntas diretas, tarefas pequenas e bem definidas.
-- complex: implementação de código de maior porte, múltiplos arquivos, refatoração.
-- reasoning: planejamento, análise e pensamento profundo -- NÃO implementação de código.
-Responda só com a palavra escolhida, nada mais.`;
+const SYSTEM_PROMPT = `Você rotula a intenção da próxima mensagem do usuário em UMA palavra: simple, complex ou reasoning.
+- simple: pergunta pontual, dúvida direta, tarefa pequena e bem definida.
+- complex: ESCREVER ou refatorar código -- implementar feature, refatorar, múltiplos arquivos, escrever testes.
+- reasoning: SÓ análise, planejamento ou decisão de arquitetura, SEM escrever código.
+Na dúvida entre complex e reasoning, escolha complex. Responda só com a palavra, nada mais.`;
+
+// Exemplos few-shot (um por classe) antes da mensagem real. Sem eles, modelos
+// pequenos (qwen2.5) carimbavam quase tudo como reasoning -- degeneravam pra
+// 100% reasoning no tráfego real (achado 2026-07-07: 3/6 acertos -> ~perfeito
+// com few-shot). Ancoram a decisão e cortam o viés pró-reasoning.
+const FEW_SHOT: ReadonlyArray<{ role: "user" | "assistant"; content: string }> = [
+  { role: "user", content: "como converto string pra int em python?" },
+  { role: "assistant", content: "simple" },
+  { role: "user", content: "implemente autenticação JWT com refresh token e testes" },
+  { role: "assistant", content: "complex" },
+  { role: "user", content: "vale a pena migrar de REST pra GraphQL aqui? analise" },
+  { role: "assistant", content: "reasoning" },
+];
 
 // Por que a classificação falhou -- content-free, pro chamador logar (achado
 // 2026-07-05: `tier: null` sozinho não distingue "manifest devolveu erro" de
@@ -92,7 +105,7 @@ async function attemptClassify(
       model: "tier-classifier",
       max_tokens: 8,
       system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: userMessage }],
+      messages: [...FEW_SHOT, { role: "user", content: userMessage }],
     }),
     signal: AbortSignal.timeout(timeoutMs),
   });

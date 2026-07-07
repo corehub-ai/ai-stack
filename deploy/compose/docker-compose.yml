@@ -236,12 +236,13 @@ services:
   # 2026-07-03: a imagem oficial do ollama nao tem env var de auto-pull; este
   # e o padrao recomendado do ecossistema -- init container + depends_on
   # service_healthy). Idempotente: se o modelo ja existe no volume, o pull
-  # retorna rapido sem rebaixar. qwen2.5:3b (2026-07-04) e o modelo do agente
-  # tier-classifier no manifest -- escolhido apos testar 5 candidatos: fica
-  # dentro do orcamento (CLASSIFIER_TIMEOUT_MS, 1500ms) aquecido e nunca sai
-  # do vocabulario simple/complex/reasoning (qwen3.5:4b tem "thinking mode"
-  # que o manifest nao repassa como texto -- content vazio sempre; ver
-  # [[ia-stack-goal]]).
+  # retorna rapido sem rebaixar. qwen2.5:7b (2026-07-07) e o modelo do agente
+  # tier-classifier no manifest -- upgrade do 3b: com os exemplos few-shot no
+  # classify.ts ele acerta 30/30 (vs 27/30 do 3b) na MESMA latencia (~400ms) e
+  # cabe 100% na GPU (4.7GB de 6GB; o classificador e o unico modelo local
+  # agora que o Copilot usa cloud). qwen3.5:4b foi descartado: o "thinking mode"
+  # dele o manifest nao repassa como texto (content vazio) e, desligado, fica
+  # PIOR que o 2.5 instruct bem-promptado (achado 2026-07-07; ver [[ia-stack-goal]]).
   ollama-pull:
     image: ollama/ollama:0.31.1
     restart: "no"
@@ -252,7 +253,7 @@ services:
     command:
       - |
         ollama pull codellama:latest
-        ollama pull qwen2.5:3b
+        ollama pull qwen2.5:7b
     depends_on:
       ollama:
         condition: service_healthy

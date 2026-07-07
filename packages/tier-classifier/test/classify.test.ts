@@ -40,6 +40,27 @@ describe("classifyTier", () => {
     }
   });
 
+  it("sends few-shot examples (one per label) before the user message", async () => {
+    let seen: Array<{ role: string; content: string }> = [];
+    const server = Bun.serve({
+      port: 0,
+      async fetch(req) {
+        const body = (await req.json()) as { messages: Array<{ role: string; content: string }> };
+        seen = body.messages;
+        return anthropicTextResponse("complex");
+      },
+    });
+    try {
+      await classifyTier(baseConfig(`http://127.0.0.1:${server.port}`), "refatora o módulo X");
+      // a mensagem do usuário é a última; antes dela, os exemplos few-shot
+      expect(seen.at(-1)).toEqual({ role: "user", content: "refatora o módulo X" });
+      const labels = seen.filter((m) => m.role === "assistant").map((m) => m.content);
+      expect(labels).toEqual(["simple", "complex", "reasoning"]);
+    } finally {
+      server.stop(true);
+    }
+  });
+
   it("trims punctuation/case noise around the label", async () => {
     const server = Bun.serve({ port: 0, fetch: () => anthropicTextResponse("  Reasoning.\n") });
     try {
@@ -187,7 +208,7 @@ describe("classifyTier", () => {
       port: 0,
       async fetch(req) {
         const body = (await req.json()) as { messages: Array<{ content: string }> };
-        seenContent = body.messages[0]?.content ?? "";
+        seenContent = body.messages.at(-1)?.content ?? "";
         return anthropicTextResponse("complex");
       },
     });
@@ -208,7 +229,7 @@ describe("classifyTier", () => {
       port: 0,
       async fetch(req) {
         const body = (await req.json()) as { messages: Array<{ content: string }> };
-        seenContent = body.messages[0]?.content ?? "";
+        seenContent = body.messages.at(-1)?.content ?? "";
         return anthropicTextResponse("simple");
       },
     });
