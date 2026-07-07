@@ -305,8 +305,11 @@ describe("tier-classifier proxy", () => {
     }
   });
 
-  it("passes streaming (text/event-stream) responses through untouched and logs streaming:true", async () => {
-    const sse = 'data: {"model":"claude-opus-4-8"}\n\ndata: [DONE]\n\n';
+  it("passes a streaming response through intact AND extracts responseModel via tee-peek (reveals fallback on streaming)", async () => {
+    // model=glm-5.2 numa resposta streaming = o fallback silencioso do opus que
+    // antes era invisível em streaming.
+    const sse =
+      'data: {"id":"x","model":"glm-5.2","choices":[{"delta":{"content":"o"}}]}\n\ndata: [DONE]\n\n';
     const server = Bun.serve({
       port: 0,
       fetch: () =>
@@ -321,11 +324,15 @@ describe("tier-classifier proxy", () => {
         body: JSON.stringify({ messages: [{ role: "user", content: "oi" }] }),
       });
       expect(res.status).toBe(200);
-      expect(await res.text()).toBe(sse);
+      expect(await res.text()).toBe(sse); // stream do cliente intacto
+      // o log do forward sai async (após o peek do tee) -- espera um tick
+      await new Promise((r) => setTimeout(r, 150));
       const forwards = logs.filter((l) => l.event === "tier-classifier.forward");
-      expect(forwards[0]).toMatchObject({ streaming: true, status: 200 });
-      // não bufferiza streaming -> não extrai responseModel
-      expect(forwards[0]?.responseModel).toBeUndefined();
+      expect(forwards[0]).toMatchObject({
+        streaming: true,
+        status: 200,
+        responseModel: "glm-5.2",
+      });
     } finally {
       server.stop(true);
     }

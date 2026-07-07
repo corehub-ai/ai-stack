@@ -50,6 +50,36 @@ describe("gateway request log", () => {
     }
   });
 
+  it("logs client identity (ua), request size (reqBytes), and tier from headers", async () => {
+    const upstream = startOkUpstream();
+    try {
+      const { app, logs } = appWithLogs(upstream.url);
+      await app.request(
+        "/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "user-agent": "GitHubCopilotChat/0.55.0",
+            "content-length": String(CHAT_BODY.length),
+            "x-manifest-tier": "reasoning",
+            authorization: "Bearer mnfst_x",
+          },
+          body: CHAT_BODY,
+        },
+        { ip: "127.0.0.1" },
+      );
+      expect(logs[0]).toMatchObject({
+        event: "gateway.request",
+        ua: "GitHubCopilotChat/0.55.0",
+        reqBytes: CHAT_BODY.length,
+        tier: "reasoning",
+      });
+    } finally {
+      upstream.stop();
+    }
+  });
+
   it("logs a client credential without a manifest-key shape (never the value itself)", async () => {
     const upstream = startOkUpstream();
     try {

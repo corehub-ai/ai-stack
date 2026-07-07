@@ -4,6 +4,7 @@ import { classifyTier } from "./classify.js";
 import type { ClassifierConfig } from "./config.js";
 import { loadConfig } from "./config.js";
 import { extractLastUserMessage } from "./message-extract.js";
+import { describeRequest, extractModelFromSse } from "./request-info.js";
 
 const TIER_HEADER = "x-manifest-tier";
 
@@ -26,6 +27,37 @@ function extractResponseModel(text: string): string | undefined {
     }
   } catch {
     // corpo não-JSON (ex.: erro em texto puro) -- sem model a extrair
+  }
+  return undefined;
+}
+
+// Lê os primeiros chunks de um stream SSE (branch de um tee) só pra descobrir o
+// `model` real -- revela fallback (opus->glm-5.2) em streaming, antes cego.
+// Best-effort e blindado: timeout por read (não trava se o stream estagnar),
+// teto de chunks/bytes, e SEMPRE cancela o reader no fim (senão o tee bufferiza
+// o branch do cliente indefinidamente). Nunca lança.
+async function peekStreamModel(stream: ReadableStream<Uint8Array>): Promise<string | undefined> {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  try {
+    for (let i = 0; i < 8; i++) {
+      const read = await Promise.race([
+        reader.read(),
+        new Promise<{ done: true; value: undefined }>((resolve) =>
+          setTimeout(() => resolve({ done: true, value: undefined }), 5000),
+        ),
+      ]);
+      if (read.done) break;
+      buf += decoder.decode(read.value, { stream: true });
+      const model = extractModelFromSse(buf);
+      if (model !== undefined) return model;
+      if (buf.length > 16384) break;
+    }
+  } catch {
+    // diagnóstico best-effort -- ignora
+  } finally {
+    reader.cancel().catch(() => {});
   }
   return undefined;
 }
@@ -132,6 +164,10 @@ export function buildApp(config: ClassifierConfig, logger: ClassifierLogger = de
       config.canonicalize && !bypassCanonicalize
         ? canonicalizeBody(bodyText)
         : { body: bodyText, stripped: [] as string[] };
+    // Caracterização content-free (tamanho/params) + tier encaminhado, pra
+    // correlacionar falha (ex.: fallback do opus) com o que a request tinha.
+    const reqInfo = describeRequest(bodyText);
+    const forwardedTier = headers[TIER_HEADER];
     const forwardStartedAt = performance.now();
     let upstream: Response;
     try {
@@ -147,6 +183,8 @@ export function buildApp(config: ClassifierConfig, logger: ClassifierLogger = de
         path: url.pathname,
         status: 502,
         latencyMs: Math.round(performance.now() - forwardStartedAt),
+        ...reqInfo,
+        ...(forwardedTier !== undefined ? { tier: forwardedTier } : {}),
         ...(stripped.length > 0 ? { stripped } : {}),
         ...(bypassCanonicalize ? { canonicalizeBypassed: true } : {}),
         error: `unreachable: ${err instanceof Error ? err.message : String(err)}`,
@@ -175,18 +213,30 @@ export function buildApp(config: ClassifierConfig, logger: ClassifierLogger = de
       path: url.pathname,
       status: upstream.status,
       latencyMs: Math.round(performance.now() - forwardStartedAt),
+      ...reqInfo,
+      ...(forwardedTier !== undefined ? { tier: forwardedTier } : {}),
       ...(stripped.length > 0 ? { stripped } : {}),
       ...(bypassCanonicalize ? { canonicalizeBypassed: true } : {}),
     };
 
-    // Resposta streaming (SSE): não dá pra ler o corpo sem quebrar o stream --
-    // loga só status/latência e repassa intacto. Limitação: o modelo real numa
-    // resposta streaming (e portanto o fallback do manifest) não é observável
-    // aqui; use uma request não-streaming pra ver o responseModel.
+    // Resposta streaming (SSE): faz um tee -- uma via intacta pro cliente, outra
+    // pra espiar o `model` do 1o chunk (revela fallback opus->glm-5.2 em
+    // streaming, antes cego). O log sai async quando o peek resolve; a resposta
+    // do cliente nunca é atrasada nem quebrada.
     if ((upstream.headers.get("content-type") ?? "").includes("text/event-stream")) {
       forwardLog.streaming = true;
+      const body = upstream.body;
+      if (body !== null) {
+        const [clientStream, peekStream] = body.tee();
+        void peekStreamModel(peekStream)
+          .then((model) => {
+            if (model !== undefined) forwardLog.responseModel = model;
+          })
+          .finally(() => logger(forwardLog));
+        return new Response(clientStream, { status: upstream.status, headers: responseHeaders });
+      }
       logger(forwardLog);
-      return new Response(upstream.body, { status: upstream.status, headers: responseHeaders });
+      return new Response(body, { status: upstream.status, headers: responseHeaders });
     }
 
     // Não-streaming: bufferiza (corpo limitado) pra registrar o `model` que o

@@ -36,6 +36,19 @@ export function createRequestLog(logger: GatewayLogger): MiddlewareHandler<AuthE
       latencyMs: Math.round(performance.now() - startedAt),
     };
 
+    // Diagnóstico content-free via headers (sem consumir o body): quem é o
+    // cliente (user-agent -- Copilot vs Claude Code vs curl), tamanho da
+    // request, e o tier pedido -- pra correlacionar quais requests falham.
+    const ua = c.req.header("user-agent");
+    if (ua !== undefined) entry.ua = ua.slice(0, 80);
+    const contentLength = c.req.header("content-length");
+    if (contentLength !== undefined) {
+      const bytes = Number(contentLength);
+      if (Number.isFinite(bytes)) entry.reqBytes = bytes;
+    }
+    const tier = c.req.header("x-manifest-tier");
+    if (tier !== undefined) entry.tier = tier;
+
     // Shape da credencial que o CLIENTE apresentou (se alguma) -- fica no log
     // mesmo quando o gateway a substitui pela injetada.
     const authorization = c.req.header("authorization");
