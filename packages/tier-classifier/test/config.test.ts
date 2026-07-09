@@ -9,7 +9,7 @@ describe("loadConfig", () => {
     expect(config.manifestKey).toBe("");
     expect(config.tier).toBe("default");
     expect(config.timeoutMs).toBe(1500);
-    expect(config.coldLoadExtraMs).toBe(15000);
+    expect(config.coldLoadExtraMs).toBe(18500);
     expect(config.canonicalize).toBe(true);
     expect(config.canonicalizeBypass).toEqual([]);
     expect(config.maxInputChars).toBe(6000);
@@ -60,6 +60,6 @@ describe("loadConfig", () => {
     });
     expect(config.port).toBe(8788);
     expect(config.timeoutMs).toBe(1500);
-    expect(config.coldLoadExtraMs).toBe(15000);
+    expect(config.coldLoadExtraMs).toBe(18500);
   });
 });

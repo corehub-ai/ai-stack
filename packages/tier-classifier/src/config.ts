@@ -54,8 +54,11 @@ export function loadConfig(
     tier: env.CLASSIFIER_TIER ?? "default",
     timeoutMs: parseNumber(env.CLASSIFIER_TIMEOUT_MS, 1500),
     // Estourar o timeout normal é o sintoma de cold-load do modelo local
-    // (achado 2026-07-05) -- ver retry em classify.ts.
-    coldLoadExtraMs: parseNumber(env.CLASSIFIER_COLD_LOAD_EXTRA_MS, 15000),
+    // (achado 2026-07-05) -- ver retry em classify.ts. O retry tem
+    // timeoutMs + coldLoadExtraMs de budget: 1500 + 18500 = 20s, pra 1a
+    // request depois de idle não cair no fail-open (default) enquanto o
+    // modelo ainda está subindo na GPU.
+    coldLoadExtraMs: parseNumber(env.CLASSIFIER_COLD_LOAD_EXTRA_MS, 18500),
     canonicalize: parseBoolean(env.CLASSIFIER_CANONICALIZE, true),
     canonicalizeBypass: splitList(env.CLASSIFIER_CANONICALIZE_BYPASS),
     maxInputChars: parseNumber(env.CLASSIFIER_MAX_INPUT_CHARS, 6000),
