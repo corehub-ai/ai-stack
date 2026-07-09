@@ -34,7 +34,10 @@ function toOllamaToolCalls(raw: unknown): OllamaToolCall[] | undefined {
       }
     }
     const toolCall: OllamaToolCall = { function: { index, name, arguments: args } };
-    if (typeof call.id === "string") toolCall.id = call.id;
+    // id vazio não é repassado: o cliente ecoaria "" de volta e providers
+    // estritos (deepseek) rejeitam (achado 2026-07-09). Sem id, o request-side
+    // sintetiza um válido.
+    if (typeof call.id === "string" && call.id.length > 0) toolCall.id = call.id;
     calls.push(toolCall);
   });
   return calls;
@@ -131,7 +134,9 @@ export async function* translateChatStream(
         const index = typeof raw.index === "number" ? raw.index : 0;
         const fn = (raw.function as Record<string, unknown> | undefined) ?? {};
         const existing = toolAcc.get(index) ?? { name: "", argsBuffer: "" };
-        if (typeof raw.id === "string") existing.id = raw.id;
+        // id vazio em delta não sobrescreve o id real do 1o delta nem chega ao
+        // cliente (mesmo motivo do não-stream: eco de "" quebra o deepseek).
+        if (typeof raw.id === "string" && raw.id.length > 0) existing.id = raw.id;
         if (typeof fn.name === "string") existing.name = fn.name;
         if (typeof fn.arguments === "string") existing.argsBuffer += fn.arguments;
         toolAcc.set(index, existing);

@@ -69,4 +69,27 @@ describe("translateChatNonStream", () => {
     };
     expect(translateChatNonStream(openai, ctx).done_reason).toBe("length");
   });
+
+  // id vazio repassado ao cliente é ecoado de volta no turno seguinte e
+  // rejeitado por providers estritos (deepseek, achado 2026-07-09) -- melhor
+  // omitir: sem id o request-side sintetiza um válido.
+  it("omits tool_call id when upstream sends an empty string id", () => {
+    const openai = {
+      choices: [
+        {
+          index: 0,
+          message: {
+            role: "assistant",
+            content: "",
+            tool_calls: [{ id: "", type: "function", function: { name: "f", arguments: "{}" } }],
+          },
+          finish_reason: "tool_calls",
+        },
+      ],
+      usage: { prompt_tokens: 1, completion_tokens: 1 },
+    };
+    const call = translateChatNonStream(openai, ctx).message.tool_calls?.[0];
+    expect(call?.function.name).toBe("f");
+    expect(call && "id" in call ? call.id : undefined).toBeUndefined();
+  });
 });

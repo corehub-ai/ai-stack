@@ -70,4 +70,32 @@ describe("translateChatStream", () => {
     const final = chunks[chunks.length - 1];
     expect(final?.message.tool_calls?.[0]?.function.arguments).toEqual({ city: "Paris" });
   });
+
+  // id vazio num delta não pode sobrescrever o id real do 1o delta nem ser
+  // repassado ao cliente (ecoado de volta, rejeitado por providers estritos --
+  // achado 2026-07-09).
+  it("ignores empty-string ids in deltas and keeps the real id", async () => {
+    const sse = [
+      'data: {"choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"call_1","function":{"name":"get_weather","arguments":""}}]},"finish_reason":null}]}',
+      'data: {"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"","function":{"arguments":"{\\"city\\":\\"Paris\\"}"}}]},"finish_reason":null}]}',
+      'data: {"choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}',
+      "data: [DONE]",
+    ].join("\n");
+    const chunks = await collect(sse);
+    const call = chunks[chunks.length - 1]?.message.tool_calls?.[0];
+    expect(call?.id).toBe("call_1");
+    expect(call?.function.arguments).toEqual({ city: "Paris" });
+  });
+
+  it("omits the id when the stream never provides a non-empty one", async () => {
+    const sse = [
+      'data: {"choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"","function":{"name":"get_weather","arguments":"{}"}}]},"finish_reason":null}]}',
+      'data: {"choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}',
+      "data: [DONE]",
+    ].join("\n");
+    const chunks = await collect(sse);
+    const call = chunks[chunks.length - 1]?.message.tool_calls?.[0];
+    expect(call?.function.name).toBe("get_weather");
+    expect(call && "id" in call ? call.id : undefined).toBeUndefined();
+  });
 });
