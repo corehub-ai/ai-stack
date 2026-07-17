@@ -73,7 +73,7 @@ services:
         condition: service_healthy
 
   manifest:
-    image: manifestdotbuild/manifest:6.13.5
+    image: manifestdotbuild/manifest:6.15.1
     restart: unless-stopped
     ports:
       - "0.0.0.0:2099:2099"            # dashboard na LAN (auth própria: Better Auth)
