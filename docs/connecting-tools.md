@@ -58,12 +58,27 @@ Abrir `http://<ip-da-maquina>:3000`, criar a conta admin (auth própria do Open 
 e usar o modelo `auto`. A conexão já vem configurada (env `OPENAI_API_BASE_URL` →
 `http://gateway:11434/v1`, chave `MANIFEST_KEY_OPENWEBUI`).
 
+## Cursor IDE (BYOK / Override OpenAI Base URL) — limitação importante
+
+**Não funciona com `http://127.0.0.1:11434/v1` nem com IP/hostname de LAN.** O Cursor
+encaminha BYOK pelos servidores dele (não chama o endpoint da sua máquina). IPs
+privados são bloqueados por SSRF; a UI costuma mostrar
+**“User Provided API Key Rate Limit Exceeded”** mesmo sem nenhum 429 — e sem
+qualquer linha `gateway.request` / `gateway.request.start` no gateway.
+
+Para usar o ia-stack no Cursor é preciso um **HTTPS público** (túnel: Cloudflare
+Tunnel, ngrok, …) apontando para `:11434`, com chave `mnfst_` no campo OpenAI API
+Key e modelo custom `auto`. Sem request no gateway após o chat → o problema ainda
+é alcance/SSRF, não rate-limit do stack.
+
 ## Clientes Ollama genéricos
-O gateway expõe a superfície Ollama em `:11434`. Qualquer cliente que fale o protocolo
-Ollama conecta apontando `OLLAMA_HOST=http://<ip-da-maquina>:11434`. Modelos disponíveis
-via `GET /api/tags` (só `auto` por enquanto). Clientes de loopback ou dentro de
-`GATEWAY_TRUSTED_CIDRS` não precisam de chave; os demais mandam a chave `mnfst_` do seu
-agente como `Authorization: Bearer`.
+O gateway expõe a superfície Ollama em `:11434`. Discovery (`/`, `/api/tags`, …) continua
+sem auth. **Inferência** (`/api/chat`, `/api/generate`):
+
+- **Host** (`http://127.0.0.1:11434`): configure `GATEWAY_TRUSTED_CIDRS=172.28.1.1/32` para o
+  hairpin do Docker — assim o host entra sem chave (HTTP).
+- **Fora do host**: só via proxy TLS que envie `X-Forwarded-Proto: https` + chave `mnfst_`
+  válida. Acesso HTTP direto na LAN é rejeitado (`403 gateway_https_required`).
 
 ## CLI `corehub`
 

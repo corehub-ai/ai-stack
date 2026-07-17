@@ -2,17 +2,26 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { type AuthEnv, createAuthMiddleware } from "./auth.js";
 import { type GatewayConfig, loadConfig } from "./config.js";
+import { createManifestKeyValidator, type ManifestKeyValidator } from "./manifest-key.js";
 import { createRequestLog, defaultLogger, type GatewayLogger } from "./request-log.js";
 import { registerAnthropicRoutes } from "./routes/anthropic.js";
 import { registerHealthRoute } from "./routes/health.js";
 import { registerOllamaRoutes } from "./routes/ollama.js";
 import { registerOpenAiRoutes } from "./routes/openai.js";
 
+export type BuildAppOptions = {
+  /** Stub de validação de chave (testes). Default: probe real em manifestUrl. */
+  validateKey?: ManifestKeyValidator;
+};
+
 export function buildApp(
   config: GatewayConfig,
   logger: GatewayLogger = defaultLogger,
+  options: BuildAppOptions = {},
 ): Hono<AuthEnv> {
   const app = new Hono<AuthEnv>();
+  const validateKey =
+    options.validateKey ?? createManifestKeyValidator({ manifestUrl: config.manifestUrl });
 
   // Antes de tudo (inclusive do auth middleware) pra logar também os 401.
   app.use("*", createRequestLog(logger));
@@ -23,7 +32,13 @@ export function buildApp(
 
   registerHealthRoute(app, config);
 
-  app.use("/v1/*", createAuthMiddleware(config));
+  const authOpts = {
+    defaultKey: config.defaultKey,
+    trustedCidrs: config.trustedCidrs,
+    trustedProxies: config.trustedProxies,
+    validateKey,
+  };
+  app.use("/v1/*", createAuthMiddleware(authOpts));
   registerOpenAiRoutes(app, config);
   registerAnthropicRoutes(app, config);
 
@@ -34,7 +49,7 @@ export function buildApp(
   // Discovery (GET /, /api/version, /api/tags, /api/show) fica sem auth
   // (Ollama real não tem).
   const ollamaAuth = createAuthMiddleware({
-    trustedCidrs: config.trustedCidrs,
+    ...authOpts,
     defaultKey: config.ollamaDefaultKey,
   });
   app.use("/api/chat", ollamaAuth);
@@ -54,9 +69,9 @@ if (import.meta.main) {
     // silêncio de 10s — e requests de LLM ficam mudos por mais que isso
     // (time-to-first-token de contexto grande + compressão do headroom),
     // cortando o stream no meio ("Connection closed mid-response" no Claude
-    // Code, visto 2026-07-04). NÃO usar 0 (desabilitado): a LAN não é
-    // confiável neste gateway (ver GATEWAY_TRUSTED_CIDRS) e sem timeout
-    // qualquer peer segura sockets pra sempre (slowloris).
+    // Code, visto 2026-07-04). NÃO usar 0 (desabilitado): fora do host-side
+    // o gateway exige HTTPS (proxy) + chave; sem idle timeout qualquer peer
+    // segura sockets pra sempre (slowloris).
     idleTimeout: 255,
     fetch(req, server) {
       const ip = server.requestIP(req)?.address;

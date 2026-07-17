@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { loadConfig } from "../src/config.js";
 import { buildApp } from "../src/index.js";
+import { acceptAllKeys } from "./support/key-validator.js";
 
 const NONSTREAM_BODY = {
   id: "chatcmpl-1",
@@ -39,17 +40,19 @@ function chatRequest(app: ReturnType<typeof buildApp>, headers: Record<string, s
   );
 }
 
+function appFor(env: Record<string, string>) {
+  return buildApp(loadConfig(env), undefined, { validateKey: acceptAllKeys });
+}
+
 describe("Ollama facade auth (GATEWAY_OLLAMA_DEFAULT_KEY)", () => {
   it("injects the ollama-facade default key for an anonymous/trusted caller on /api/chat", async () => {
     const upstream = startCapturingUpstream();
     try {
-      const app = buildApp(
-        loadConfig({
-          HEADROOM_URL: upstream.url,
-          GATEWAY_DEFAULT_KEY: "mnfst_lan_anon",
-          GATEWAY_OLLAMA_DEFAULT_KEY: "mnfst_ollama_facade",
-        }),
-      );
+      const app = appFor({
+        HEADROOM_URL: upstream.url,
+        GATEWAY_DEFAULT_KEY: "mnfst_lan_anon",
+        GATEWAY_OLLAMA_DEFAULT_KEY: "mnfst_ollama_facade",
+      });
       const res = await chatRequest(app);
       expect(res.status).toBe(200);
       expect(upstream.seenAuthorizations).toEqual(["Bearer mnfst_ollama_facade"]);
@@ -61,9 +64,7 @@ describe("Ollama facade auth (GATEWAY_OLLAMA_DEFAULT_KEY)", () => {
   it("falls back to GATEWAY_DEFAULT_KEY on /api/chat when GATEWAY_OLLAMA_DEFAULT_KEY is unset", async () => {
     const upstream = startCapturingUpstream();
     try {
-      const app = buildApp(
-        loadConfig({ HEADROOM_URL: upstream.url, GATEWAY_DEFAULT_KEY: "mnfst_lan_anon" }),
-      );
+      const app = appFor({ HEADROOM_URL: upstream.url, GATEWAY_DEFAULT_KEY: "mnfst_lan_anon" });
       const res = await chatRequest(app);
       expect(res.status).toBe(200);
       expect(upstream.seenAuthorizations).toEqual(["Bearer mnfst_lan_anon"]);
@@ -75,13 +76,11 @@ describe("Ollama facade auth (GATEWAY_OLLAMA_DEFAULT_KEY)", () => {
   it("preserves a caller's own credential on /api/chat -- ollamaDefaultKey is never used", async () => {
     const upstream = startCapturingUpstream();
     try {
-      const app = buildApp(
-        loadConfig({
-          HEADROOM_URL: upstream.url,
-          GATEWAY_DEFAULT_KEY: "mnfst_lan_anon",
-          GATEWAY_OLLAMA_DEFAULT_KEY: "mnfst_ollama_facade",
-        }),
-      );
+      const app = appFor({
+        HEADROOM_URL: upstream.url,
+        GATEWAY_DEFAULT_KEY: "mnfst_lan_anon",
+        GATEWAY_OLLAMA_DEFAULT_KEY: "mnfst_ollama_facade",
+      });
       const res = await chatRequest(app, { authorization: "Bearer mnfst_own_credential" });
       expect(res.status).toBe(200);
       expect(upstream.seenAuthorizations).toEqual(["Bearer mnfst_own_credential"]);
@@ -93,13 +92,11 @@ describe("Ollama facade auth (GATEWAY_OLLAMA_DEFAULT_KEY)", () => {
   it("still uses GATEWAY_DEFAULT_KEY (not ollamaDefaultKey) for /v1/chat/completions", async () => {
     const upstream = startCapturingUpstream();
     try {
-      const app = buildApp(
-        loadConfig({
-          HEADROOM_URL: upstream.url,
-          GATEWAY_DEFAULT_KEY: "mnfst_lan_anon",
-          GATEWAY_OLLAMA_DEFAULT_KEY: "mnfst_ollama_facade",
-        }),
-      );
+      const app = appFor({
+        HEADROOM_URL: upstream.url,
+        GATEWAY_DEFAULT_KEY: "mnfst_lan_anon",
+        GATEWAY_OLLAMA_DEFAULT_KEY: "mnfst_ollama_facade",
+      });
       const res = await app.request(
         "/v1/chat/completions",
         {

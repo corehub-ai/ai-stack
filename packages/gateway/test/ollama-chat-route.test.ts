@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { type AuthEnv, createAuthMiddleware } from "../src/auth.js";
 import type { GatewayConfig } from "../src/config.js";
 import { registerOllamaRoutes } from "../src/routes/ollama.js";
+import { testAuthOpts } from "./support/key-validator.js";
 import { startMockUpstream } from "./support/mock-upstream.js";
 
 function buildApp(headroomUrl: string) {
@@ -11,14 +12,16 @@ function buildApp(headroomUrl: string) {
     headroomUrl,
     manifestUrl: "http://unused:2099",
     trustedCidrs: [],
+    trustedProxies: [],
     defaultKey: "mnfst_default",
     corsOrigins: [],
     ollamaVersion: "0.31.1",
     ollamaDefaultKey: "mnfst_default",
   };
+  const auth = createAuthMiddleware(testAuthOpts(config.defaultKey));
   const app = new Hono<AuthEnv>();
-  app.use("/api/chat", createAuthMiddleware(config));
-  app.use("/api/generate", createAuthMiddleware(config));
+  app.use("/api/chat", auth);
+  app.use("/api/generate", auth);
   registerOllamaRoutes(app, config);
   return app;
 }
@@ -59,7 +62,7 @@ describe("POST /api/chat", () => {
     }
   });
 
-  it("401s a credential-less caller from outside the trusted set", async () => {
+  it("403s a credential-less caller from outside the host (HTTPS required)", async () => {
     const upstream = startMockUpstream("chat-completions-stream");
     try {
       const app = buildApp(upstream.url);
@@ -72,7 +75,9 @@ describe("POST /api/chat", () => {
         },
         { ip: "203.0.113.9" },
       );
-      expect(res.status).toBe(401);
+      expect(res.status).toBe(403);
+      const body = (await res.json()) as { error: { code: string } };
+      expect(body.error.code).toBe("gateway_https_required");
     } finally {
       upstream.stop();
     }

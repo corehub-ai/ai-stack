@@ -8,6 +8,7 @@ describe("loadConfig", () => {
     expect(config.headroomUrl).toBe("http://headroom:8787");
     expect(config.manifestUrl).toBe("http://manifest:2099");
     expect(config.trustedCidrs).toEqual([]);
+    expect(config.trustedProxies).toEqual([]);
     expect(config.defaultKey).toBe("");
     expect(config.corsOrigins).toEqual([]);
     expect(config.ollamaVersion).toBe("0.31.1");
@@ -38,9 +39,11 @@ describe("loadConfig", () => {
   it("reads and trims comma-separated lists", () => {
     const config = loadConfig({
       GATEWAY_TRUSTED_CIDRS: " 172.28.1.0/24 , 127.0.0.1/32",
+      GATEWAY_TRUSTED_PROXIES: " 10.0.0.2/32 , 10.0.0.3/32 ",
       GATEWAY_CORS_ORIGINS: "http://localhost:3000,http://openwebui:3000",
     });
     expect(config.trustedCidrs).toEqual(["172.28.1.0/24", "127.0.0.1/32"]);
+    expect(config.trustedProxies).toEqual(["10.0.0.2/32", "10.0.0.3/32"]);
     expect(config.corsOrigins).toEqual(["http://localhost:3000", "http://openwebui:3000"]);
   });
 

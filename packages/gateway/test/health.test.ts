@@ -10,6 +10,7 @@ function baseConfig(overrides: Partial<GatewayConfig>): GatewayConfig {
     headroomUrl: "http://127.0.0.1:1",
     manifestUrl: "http://127.0.0.1:1",
     trustedCidrs: [],
+    trustedProxies: [],
     defaultKey: "",
     corsOrigins: [],
     ollamaVersion: "0.31.1",

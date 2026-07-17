@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { type AuthEnv, createAuthMiddleware } from "../src/auth.js";
 import type { GatewayConfig } from "../src/config.js";
 import { registerOpenAiRoutes } from "../src/routes/openai.js";
+import { testAuthOpts } from "./support/key-validator.js";
 import { startMockUpstream } from "./support/mock-upstream.js";
 
 function buildApp(headroomUrl: string) {
@@ -11,13 +12,14 @@ function buildApp(headroomUrl: string) {
     headroomUrl,
     manifestUrl: "http://unused:2099",
     trustedCidrs: [],
+    trustedProxies: [],
     defaultKey: "mnfst_default",
     corsOrigins: [],
     ollamaVersion: "0.31.1",
     ollamaDefaultKey: "mnfst_default",
   };
   const app = new Hono<AuthEnv>();
-  app.use("*", createAuthMiddleware(config));
+  app.use("*", createAuthMiddleware(testAuthOpts(config.defaultKey)));
   registerOpenAiRoutes(app, config);
   return app;
 }

@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { type AuthEnv, createAuthMiddleware } from "../src/auth.js";
 import type { GatewayConfig } from "../src/config.js";
 import { registerAnthropicRoutes } from "../src/routes/anthropic.js";
+import { testAuthOpts } from "./support/key-validator.js";
 
 // headroomUrl aponta para uma porta inalcançável de propósito: a rota
 // count_tokens deve responder LOCALMENTE, sem proxy pro headroom/manifest
@@ -13,13 +14,14 @@ function buildApp() {
     headroomUrl: "http://127.0.0.1:1",
     manifestUrl: "http://unused:2099",
     trustedCidrs: [],
+    trustedProxies: [],
     defaultKey: "mnfst_default",
     corsOrigins: [],
     ollamaVersion: "0.31.1",
     ollamaDefaultKey: "mnfst_default",
   };
   const app = new Hono<AuthEnv>();
-  app.use("*", createAuthMiddleware(config));
+  app.use("*", createAuthMiddleware(testAuthOpts(config.defaultKey)));
   registerAnthropicRoutes(app, config);
   return app;
 }
@@ -339,7 +341,7 @@ describe("POST /v1/messages/count_tokens (respondido localmente)", () => {
     expect(wrongType.status).toBe(400);
   });
 
-  it("still sits behind the auth middleware (401 without credential from untrusted ip)", async () => {
+  it("still sits behind the auth middleware (403 HTTPS required without credential from untrusted ip)", async () => {
     const app = buildApp();
     const res = await app.request(
       "/v1/messages/count_tokens",
@@ -350,6 +352,8 @@ describe("POST /v1/messages/count_tokens (respondido localmente)", () => {
       },
       { ip: "203.0.113.7" },
     );
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("gateway_https_required");
   });
 });

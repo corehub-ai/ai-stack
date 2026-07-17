@@ -193,7 +193,8 @@ All configuration lives in `deploy/compose/.env` (created by `corehub init` from
 | Var | Default | Purpose |
 |---|---|---|
 | `GATEWAY_HOST_PORT` | `11434` | Host port for the gateway (emulates Ollama's default port). |
-| `GATEWAY_TRUSTED_CIDRS` | *(empty)* | CIDRs that may call without a key. **Leave empty** unless you understand the docker-proxy hairpin risk (see [Security](#security-notes)). |
+| `GATEWAY_TRUSTED_CIDRS` | *(empty)* | Host-side beyond loopback: HTTP ok + anonymous inject. Use `172.28.1.1/32` for Docker hairpin (`http://127.0.0.1:11434`). Add `172.28.1.0/24` for compose-internal HTTP. Do **not** put LAN CIDRs here. |
+| `GATEWAY_TRUSTED_PROXIES` | *(empty)* | TLS proxies allowed to set `X-Forwarded-Proto: https`. Empty = trust the header from any external peer (only safe if `:11434` is not on the LAN). |
 | `GATEWAY_CORS_ORIGINS` | *(empty)* | Allowed browser origins. |
 | `MANIFEST_PUBLIC_URL` | `http://localhost:2099` | Origin the browser uses for the dashboard. |
 | `COMPOSE_PROFILES` | `local-models` | Active profiles. Add `,ui` for Open WebUI. |
@@ -219,9 +220,14 @@ All configuration lives in `deploy/compose/.env` (created by `corehub init` from
 
 ## Connecting your tools
 
-The gateway is at `http://<lan-ip>:11434`. Each tool authenticates with its agent's `mnfst_`
-key (`Authorization: Bearer …` or the tool's native key field). Loopback callers (and anyone in
-`GATEWAY_TRUSTED_CIDRS`) may connect without a key.
+The gateway is at `http://<lan-ip>:11434` (or via your TLS proxy). Auth rules:
+
+- **Host-side** (loopback + `GATEWAY_TRUSTED_CIDRS`): HTTP allowed; missing key → inject
+  `GATEWAY_DEFAULT_KEY`. Docker hairpin makes `http://127.0.0.1:11434` from the host appear
+  as `172.28.1.1` — put `172.28.1.1/32` in `GATEWAY_TRUSTED_CIDRS` to keep that working.
+- **Outside the host**: must come as HTTPS via a TLS-terminating proxy that sets
+  `X-Forwarded-Proto: https` (optional allow-list: `GATEWAY_TRUSTED_PROXIES`) **and** present a
+  valid `mnfst_*` key (validated against Manifest). The stack does not terminate TLS itself.
 
 Full, copy-pasteable per-tool setup — **opencode, Claude Code, GitHub Copilot Chat, Open WebUI,
 generic Ollama clients** — is in **[`docs/connecting-tools.md`](docs/connecting-tools.md)**.
@@ -340,11 +346,12 @@ links it into the agent skill paths without touching skills it didn't create.
 - **`deploy/compose/.env` is git-ignored** and holds every secret (infra + `mnfst_` agent keys).
   It never enters the repo. Never `git add -f` it. When sharing the repo, recipients create their
   own `.env` from `.env.example`.
-- **LAN auth:** by default only loopback (`127.0.0.1`/`::1`) may call the gateway without a key.
-  `GATEWAY_TRUSTED_CIDRS` is opt-in and risky: Docker's userland-proxy hairpins host-loopback
-  traffic through the bridge gateway IP, so adding the compose subnet there would let **any**
-  host process through without a credential. Only enable it if you understand that (e.g. with
-  `--userland-proxy=false` on the Docker daemon).
+- **LAN auth:** **Host-side** (loopback + `GATEWAY_TRUSTED_CIDRS`) may use plain HTTP and omit
+  a key (injected `GATEWAY_DEFAULT_KEY`). **Everyone else** must use HTTPS via a TLS proxy
+  (`X-Forwarded-Proto: https`, optionally restricted by `GATEWAY_TRUSTED_PROXIES`) and a
+  valid `mnfst_*` key. The gateway does not terminate TLS. Prefer
+  `GATEWAY_TRUSTED_CIDRS=172.28.1.1/32` for host hairpin without opening the LAN; do not put
+  LAN CIDRs in that list.
 - Provider credentials live only inside the manifest (encrypted at rest with
   `MANIFEST_ENCRYPTION_KEY`); the gateway and classifier never hold them.
 

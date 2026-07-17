@@ -23,13 +23,16 @@ services:
       - GATEWAY_PORT=11434
       - HEADROOM_URL=http://headroom:8787
       - MANIFEST_URL=http://manifest:2099
-      # NAO default pra 172.28.1.0/24 (a subnet da rede acima): achado
-      # 2026-07-03 -- o docker-proxy (userland-proxy, ligado por padrao)
-      # faz hairpin do trafego loopback do host pro gateway da bridge
-      # (172.28.1.1), entao QUALQUER processo no host passaria pela CIDR
-      # sem credencial. So loopback (127.0.0.1/::1) e confiavel por padrao;
-      # trate GATEWAY_TRUSTED_CIDRS como opt-in ciente do risco.
+      # Lado do host (além de 127.0.0.1/::1): HTTP ok + anônimo com
+      # GATEWAY_DEFAULT_KEY. Inclua o gateway da bridge (hairpin do
+      # docker-proxy → http://127.0.0.1:11434 aparece como 172.28.1.1) e,
+      # se quiser HTTP interno do compose (Open WebUI→gateway), a subnet.
+      # NÃO coloque CIDRs de LAN (192.168.x) aqui — esses exigem HTTPS+chave.
       - GATEWAY_TRUSTED_CIDRS=${GATEWAY_TRUSTED_CIDRS:-}
+      # Proxies TLS (Caddy/nginx). Se preenchido, fora do host só esses IPs
+      # podem afirmar X-Forwarded-Proto: https. Vazio = confia no header
+      # (ok se :11434 não estiver exposto na LAN).
+      - GATEWAY_TRUSTED_PROXIES=${GATEWAY_TRUSTED_PROXIES:-}
       - GATEWAY_DEFAULT_KEY=${MANIFEST_KEY_LAN_ANON}
       - GATEWAY_CORS_ORIGINS=${GATEWAY_CORS_ORIGINS:-}
       # Identidade dedicada (harness) pro caller anônimo/confiável na façade
